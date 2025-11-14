@@ -60,9 +60,13 @@ export class OpenaiKeyManagerComponent {
     if (this.form.invalid) {
       return;
     }
-    this.service.create(this.form.getRawValue()).subscribe(key => {
-      this.keys.update(list => [...list, key]);
-      this.form.reset();
+    const { name, key } = this.form.getRawValue();
+    if (!name || !key) {
+      return;
+    }
+    this.service.create({ name, key }).subscribe(createdKey => {
+      this.keys.update(list => [...list, createdKey]);
+      this.form.reset({ name: '', key: '' });
       this.notifications.push('success', 'Key added');
     });
   }

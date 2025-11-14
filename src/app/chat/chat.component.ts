@@ -64,7 +64,7 @@ import { Assistant } from '../models/assistant.model';
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class ChatComponent {
-  private readonly state = inject(GlobalState);
+  readonly state = inject(GlobalState);
   private readonly vectorStoreService = inject(VectorStoreService);
   private readonly assistantService = inject(AssistantService);
   private readonly threadService = inject(ThreadService);
@@ -211,7 +211,7 @@ export class ChatComponent {
       .list(threadId)
       .pipe(takeUntilDestroyed())
       .subscribe(messages => {
-      this.state.setMessages(messages);
+        this.state.setMessages(messages);
       });
   }
 
