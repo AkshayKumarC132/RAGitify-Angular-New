@@ -47,7 +47,7 @@ export class OpenaiKeyManagerComponent {
 
   readonly keys = signal<OpenAiKey[]>([]);
 
-  readonly form = this.fb.group({
+  readonly form = this.fb.nonNullable.group({
     name: ['', Validators.required],
     key: ['', [Validators.required, Validators.minLength(10)]]
   });

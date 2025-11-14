@@ -33,7 +33,7 @@ import { Assistant } from '../models/assistant.model';
           <select
             class="rounded-lg border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-slate-200"
             [value]="mode()"
-            (change)="setMode($event.target.value as Mode)"
+            (change)="onModeChange($event)"
           >
             <option value="normal">Normal</option>
             <option value="document">Document</option>
@@ -42,7 +42,7 @@ import { Assistant } from '../models/assistant.model';
           <select
             class="rounded-lg border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-slate-200"
             [value]="model()"
-            (change)="setModel($event.target.value)"
+            (change)="onModelChange($event)"
           >
             <option *ngFor="let option of models" [value]="option">{{ option }}</option>
           </select>
@@ -122,6 +122,16 @@ export class ChatComponent {
         this.state.updateAssistant(updated);
       });
     }
+  }
+
+  onModeChange(event: Event): void {
+    const value = (event.target as HTMLSelectElement).value as Mode;
+    this.setMode(value);
+  }
+
+  onModelChange(event: Event): void {
+    const value = (event.target as HTMLSelectElement).value;
+    this.setModel(value);
   }
 
   handleSend(content: string): void {
