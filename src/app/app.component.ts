@@ -1,23 +1,30 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
-import { AsyncPipe, NgIf } from '@angular/common';
-import { GlobalState } from './state/global.state';
+import { NgIf } from '@angular/common';
 import { AuthService } from './services/auth.service';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, AsyncPipe, NgIf],
+  imports: [RouterOutlet, NgIf],
   template: `
     <div class="min-h-screen bg-surface text-slate-100">
-      <router-outlet />
+      <ng-container *ngIf="bootstrapped(); else loading">
+        <router-outlet />
+      </ng-container>
     </div>
+
+    <ng-template #loading>
+      <div class="flex min-h-screen items-center justify-center bg-surface text-slate-300">
+        <span class="mr-3 h-6 w-6 animate-spin rounded-full border-2 border-white/30 border-t-transparent"></span>
+        <span class="text-sm">Loading RAGitify…</span>
+      </div>
+    </ng-template>
   `,
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class AppComponent {
   private readonly auth = inject(AuthService);
-  private readonly state = inject(GlobalState);
   readonly bootstrapped = signal(false);
 
   constructor() {

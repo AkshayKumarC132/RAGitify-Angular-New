@@ -115,11 +115,17 @@ export class ProjectsComponent {
             .pipe(switchMap(assistant => of({ store, assistant })))
         )
       )
-      .subscribe(project => {
-        this.notifications.push('success', 'Project created.');
-        this.projects.update(list => [...list, project]);
-        this.projectForm.reset({ name: '', instructions: '', model: 'gpt-4o-mini' });
-        this.setActive(project);
+      .subscribe({
+        next: project => {
+          this.notifications.push('success', 'Project created.');
+          this.projects.update(list => [...list, project]);
+          this.projectForm.reset({ name: '', instructions: '', model: 'gpt-4o-mini' });
+          this.setActive(project);
+        },
+        error: error => {
+          console.error('Project creation failed', error);
+          this.notifications.push('error', 'Unable to create the project.');
+        }
       });
   }
 
@@ -138,33 +144,53 @@ export class ProjectsComponent {
       return;
     }
     if (checked) {
-      this.documentAccessService.create({ assistant_id: assistant.id, document_ids: [id] }).subscribe(() => {
-        this.selectedDocuments.update(list => [...new Set([...list, id])]);
-        this.refreshDocumentLinks();
+      this.documentAccessService.create({ assistant_id: assistant.id, document_ids: [id] }).subscribe({
+        next: () => {
+          this.selectedDocuments.update(list => [...new Set([...list, id])]);
+          this.refreshDocumentLinks();
+          this.notifications.push('success', 'Document linked to the assistant.');
+        },
+        error: error => {
+          console.error('Linking document failed', error);
+          this.notifications.push('error', 'Unable to link the document.');
+        }
       });
     } else {
       const link = this.documentLinks().find(item => item.document === id && item.assistant === assistant.id);
       if (!link) {
         return;
       }
-      this.documentAccessService.delete(link.id).subscribe(() => {
-        this.selectedDocuments.update(list => list.filter(item => item !== id));
-        this.refreshDocumentLinks();
+      this.documentAccessService.delete(link.id).subscribe({
+        next: () => {
+          this.selectedDocuments.update(list => list.filter(item => item !== id));
+          this.refreshDocumentLinks();
+          this.notifications.push('success', 'Document unlinked.');
+        },
+        error: error => {
+          console.error('Unlinking document failed', error);
+          this.notifications.push('error', 'Unable to unlink the document.');
+        }
       });
     }
   }
 
   private load(): void {
-    combineLatest([this.vectorStoreService.list(), this.assistantService.list()]).subscribe(([stores, assistants]) => {
-      const mapped = stores
-        .map(store => {
-          const assistant = assistants.find(item => item.vector_store === store.id);
-          return assistant ? { store, assistant } : null;
-        })
-        .filter((value): value is { store: VectorStore; assistant: Assistant } => value !== null);
-      this.projects.set(mapped);
-      if (mapped.length && !this.state.currentVectorStore()) {
-        this.setActive(mapped[0]);
+    combineLatest([this.vectorStoreService.list(), this.assistantService.list()]).subscribe({
+      next: ([stores, assistants]) => {
+        const mapped = stores
+          .map(store => {
+            const assistant = assistants.find(item => item.vector_store === store.id);
+            return assistant ? { store, assistant } : null;
+          })
+          .filter((value): value is { store: VectorStore; assistant: Assistant } => value !== null);
+        this.projects.set(mapped);
+        if (mapped.length && !this.state.currentVectorStore()) {
+          this.setActive(mapped[0]);
+        }
+      },
+      error: error => {
+        console.error('Failed to load projects', error);
+        this.notifications.push('error', 'Unable to load existing projects.');
       }
     });
     this.loadDocuments();
@@ -172,15 +198,27 @@ export class ProjectsComponent {
   }
 
   private loadDocuments(): void {
-    this.documentService.list().subscribe(items => this.documents.set(items));
+    this.documentService.list().subscribe({
+      next: items => this.documents.set(items),
+      error: error => {
+        console.error('Failed to load documents', error);
+        this.notifications.push('error', 'Unable to load documents for linking.');
+      }
+    });
   }
 
   private refreshDocumentLinks(): void {
-    this.documentAccessService.list().subscribe(links => {
-      this.documentLinks.set(links);
-      const assistant = this.state.currentAssistant();
-      if (assistant) {
-        this.selectedDocuments.set(links.filter(link => link.assistant === assistant.id).map(link => link.document));
+    this.documentAccessService.list().subscribe({
+      next: links => {
+        this.documentLinks.set(links);
+        const assistant = this.state.currentAssistant();
+        if (assistant) {
+          this.selectedDocuments.set(links.filter(link => link.assistant === assistant.id).map(link => link.document));
+        }
+      },
+      error: error => {
+        console.error('Failed to load document links', error);
+        this.notifications.push('error', 'Unable to load linked documents.');
       }
     });
   }

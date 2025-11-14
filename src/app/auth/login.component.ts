@@ -1,14 +1,14 @@
-import { AsyncPipe, JsonPipe, NgIf } from '@angular/common';
+import { NgIf } from '@angular/common';
 import { ChangeDetectionStrategy, Component, effect, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
 import { AuthService } from '../services/auth.service';
 import { ToastContainerComponent } from '../components/toast-container/toast-container.component';
+import { NotificationService } from '../services/notification.service';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [ReactiveFormsModule, NgIf, AsyncPipe, JsonPipe, ToastContainerComponent],
+  imports: [ReactiveFormsModule, NgIf, ToastContainerComponent],
   template: `
     <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900">
       <app-toast-container />
@@ -81,8 +81,8 @@ import { ToastContainerComponent } from '../components/toast-container/toast-con
 })
 export class LoginComponent {
   protected readonly auth = inject(AuthService);
-  protected readonly router = inject(Router);
   protected readonly fb = inject(FormBuilder);
+  private readonly notifications = inject(NotificationService);
   readonly mode = signal<'login' | 'register'>('login');
 
   readonly form = this.fb.nonNullable.group({
@@ -100,6 +100,24 @@ export class LoginComponent {
         this.form.enable({ emitEvent: false });
       }
     });
+
+    effect(() => {
+      const registerMode = this.mode() === 'register';
+      const first = this.form.get('first_name');
+      const last = this.form.get('last_name');
+      if (!first || !last) {
+        return;
+      }
+      if (registerMode) {
+        first.addValidators(Validators.required);
+        last.addValidators(Validators.required);
+      } else {
+        first.removeValidators(Validators.required);
+        last.removeValidators(Validators.required);
+      }
+      first.updateValueAndValidity({ emitEvent: false });
+      last.updateValueAndValidity({ emitEvent: false });
+    });
   }
 
   toggleMode(): void {
@@ -112,17 +130,24 @@ export class LoginComponent {
       return;
     }
     const value = this.form.getRawValue();
-    if (this.mode() === 'login') {
-      this.auth.login({ email: value.email, password: value.password }).subscribe();
-    } else {
-      this.auth
-        .register({
-          email: value.email,
-          password: value.password,
-          first_name: value.first_name,
-          last_name: value.last_name
-        })
-        .subscribe();
-    }
+    const request$ =
+      this.mode() === 'login'
+        ? this.auth.login({ email: value.email, password: value.password })
+        : this.auth.register({
+            email: value.email,
+            password: value.password,
+            first_name: value.first_name,
+            last_name: value.last_name
+          });
+
+    request$.subscribe({
+      error: () => {
+        const message =
+          this.mode() === 'login'
+            ? 'Unable to sign in with those credentials.'
+            : 'Account creation failed. Please verify your details.';
+        this.notifications.push('error', message);
+      }
+    });
   }
 }

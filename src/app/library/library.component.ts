@@ -110,23 +110,44 @@ export class LibraryComponent {
     this.state.setUploading(true);
     this.documentService
       .ingest({ vector_store_id: vectorStore.id, document: this.selectedFile ?? undefined, s3_url: this.form.value.s3_url ?? undefined })
-      .subscribe(doc => {
-        this.pollStatus(doc.id);
-        this.selectedFile = null;
-        this.form.reset();
-        this.loadDocuments();
+      .subscribe({
+        next: doc => {
+          this.pollStatus(doc.id);
+          this.selectedFile = null;
+          this.form.reset();
+          this.loadDocuments();
+          this.notifications.push('success', 'Document submitted for ingestion.');
+        },
+        error: error => {
+          console.error('Document ingest failed', error);
+          this.state.setUploading(false);
+          this.notifications.push('error', 'Document upload failed. Please try again.');
+        }
       });
   }
 
   remove(doc: DocumentItem): void {
-    this.documentService.delete(doc.id).subscribe(() => {
-      this.loadDocuments();
+    this.documentService.delete(doc.id).subscribe({
+      next: () => {
+        this.loadDocuments();
+        this.notifications.push('success', 'Document removed.');
+      },
+      error: error => {
+        console.error('Document removal failed', error);
+        this.notifications.push('error', 'Unable to delete the document.');
+      }
     });
   }
 
   private loadDocuments(): void {
-    this.documentService.list().subscribe(items => {
-      this.documents.set(items);
+    this.documentService.list().subscribe({
+      next: items => {
+        this.documents.set(items);
+      },
+      error: error => {
+        console.error('Failed to load documents', error);
+        this.notifications.push('error', 'Unable to load documents.');
+      }
     });
   }
 
@@ -143,10 +164,16 @@ export class LibraryComponent {
         takeWhile(status => status.status !== 'completed', true),
         takeUntilDestroyed()
       )
-      .subscribe(status => {
-        if (['completed', 'failed'].includes(status.status)) {
+      .subscribe({
+        next: status => {
+          if (['completed', 'failed'].includes(status.status)) {
+            this.state.setUploading(false);
+            this.loadDocuments();
+          }
+        },
+        error: error => {
+          console.error('Document status polling failed', error);
           this.state.setUploading(false);
-          this.loadDocuments();
         }
       });
   }

@@ -15,7 +15,7 @@ import { FormsModule } from '@angular/forms';
         <textarea
           [(ngModel)]="draft"
           name="message"
-          rows="expanded() ? 3 : 1"
+          [attr.rows]="expanded() ? 3 : 1"
           class="h-full w-full resize-none border-none bg-transparent text-sm text-slate-100 outline-none"
           placeholder="Message RAGitify..."
           (input)="handleInput()"

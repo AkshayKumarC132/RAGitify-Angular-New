@@ -1,7 +1,8 @@
 import { AsyncPipe, DatePipe, NgFor, NgIf } from '@angular/common';
 import { ChangeDetectionStrategy, Component, effect, inject, signal } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
-import { interval, of, startWith, switchMap, takeWhile, tap } from 'rxjs';
+import { EMPTY, interval, of, startWith, switchMap, takeWhile, tap } from 'rxjs';
+import { catchError } from 'rxjs/operators';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ChatBarComponent } from '../chatbar/chat-bar.component';
 import { MessageBubbleComponent } from './message-bubble.component';
@@ -153,9 +154,19 @@ export class ChatComponent {
             mode: this.mode(),
             instructions: content
           });
+        }),
+        catchError(error => {
+          console.error('Failed to send message', error);
+          this.state.setRunStatus(null);
+          this.notifications.push('error', 'Unable to send your message. Please try again.');
+          return EMPTY;
         })
       )
-      .subscribe(run => this.monitorRun(run));
+      .subscribe(run => {
+        this.state.setRunStatus(run.status);
+        this.startMessagePolling(run.thread);
+        this.monitorRun(run);
+      });
   }
 
   private bootstrap(): void {
@@ -166,9 +177,14 @@ export class ChatComponent {
       this.ensureVectorStore()
         .pipe(
           switchMap(store => this.ensureAssistant(store)),
-          switchMap(result => this.ensureThread(result))
+          switchMap(result => this.ensureThread(result)),
+          catchError(error => {
+            console.error('Failed to bootstrap chat workspace', error);
+            this.notifications.push('error', 'Unable to initialize your chat workspace.');
+            return EMPTY;
+          }),
+          takeUntilDestroyed()
         )
-        .pipe(takeUntilDestroyed())
         .subscribe(({ thread }) => this.state.updateThread(thread));
     });
   }
@@ -240,6 +256,9 @@ export class ChatComponent {
         tap(latest => {
           this.state.setActiveRun(latest);
           this.state.setRunStatus(latest.status);
+          if (latest.status === 'requires_action') {
+            this.handleRequiredAction(latest);
+          }
           if (latest.status === 'completed') {
             this.messageService.list(latest.thread).subscribe(messages => this.state.setMessages(messages));
           }
@@ -251,8 +270,37 @@ export class ChatComponent {
         takeUntilDestroyed()
       )
       .subscribe({
-        complete: () => this.state.setRunStatus(null)
+        complete: () => this.state.setRunStatus(null),
+        error: error => {
+          console.error('Run polling failed', error);
+          this.notifications.push('error', 'Lost connection while monitoring the run.');
+          this.state.setRunStatus(null);
+        }
       });
+  }
+
+  private startMessagePolling(threadId: string): void {
+    interval(2000)
+      .pipe(
+        startWith(0),
+        switchMap(() => this.messageService.list(threadId)),
+        tap(messages => this.state.setMessages(messages)),
+        takeWhile(() => {
+          const status = this.state.runStatus();
+          return status === 'queued' || status === 'in_progress' || status === 'requires_action';
+        }, true),
+        takeUntilDestroyed()
+      )
+      .subscribe({
+        error: error => console.error('Message polling error', error)
+      });
+  }
+
+  private handleRequiredAction(run: Run): void {
+    if (!run.required_action || run.required_action.type !== 'submit_tool_outputs') {
+      return;
+    }
+    this.notifications.push('warning', 'Assistant requires tool outputs. Please provide the requested information.');
   }
 }
 
