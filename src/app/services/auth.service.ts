@@ -45,17 +45,19 @@ export class AuthService {
       });
   }
 
-  restoreSession(): void {
+  restoreSession(): boolean {
     const raw = sessionStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      return;
+      return false;
     }
     try {
       const parsed = JSON.parse(raw) as AuthResponse;
       this.state.setSession(parsed.token, parsed.user);
+      return true;
     } catch (error) {
       console.error('Failed to parse session', error);
       sessionStorage.removeItem(STORAGE_KEY);
+      return false;
     }
   }
 

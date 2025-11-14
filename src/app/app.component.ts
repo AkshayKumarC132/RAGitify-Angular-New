@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
+import { Router, RouterOutlet } from '@angular/router';
 import { NgIf } from '@angular/common';
 import { AuthService } from './services/auth.service';
 
@@ -25,10 +25,20 @@ import { AuthService } from './services/auth.service';
 })
 export class AppComponent {
   private readonly auth = inject(AuthService);
+  private readonly router = inject(Router);
   readonly bootstrapped = signal(false);
 
   constructor() {
-    this.auth.restoreSession();
-    this.bootstrapped.set(true);
+    const hasSession = this.auth.restoreSession();
+    queueMicrotask(() => {
+      const currentPath = typeof window !== 'undefined' ? window.location.pathname : '/';
+      if (!hasSession && currentPath !== '/auth') {
+        this.router.navigateByUrl('/auth');
+      }
+      if (hasSession && (currentPath === '/' || currentPath === '/auth')) {
+        this.router.navigateByUrl('/chat');
+      }
+      this.bootstrapped.set(true);
+    });
   }
 }
