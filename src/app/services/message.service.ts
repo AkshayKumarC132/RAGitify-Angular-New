@@ -13,8 +13,12 @@ export class MessageService extends BaseApiService {
   list(threadId: string): Observable<MessageItem[]> {
     const token = this.requireToken();
     return this.http
-      .get<unknown[]>(buildTokenUrlWithId('thread', token, threadId, 'messages'))
-      .pipe(map(messages => messages.map(message => this.normaliseMessage(message))));
+      .get<unknown>(buildTokenUrlWithId('thread', token, threadId, 'messages'))
+      .pipe(
+        map(response =>
+          this.extractMessageList(response).map(message => this.normaliseMessage(message))
+        )
+      );
   }
 
   listAll(threadId?: string): Observable<MessageItem[]> {
@@ -24,8 +28,12 @@ export class MessageService extends BaseApiService {
       params = params.set('thread_id', threadId);
     }
     return this.http
-      .get<unknown[]>(buildTokenUrl('message', token, 'list'), { params })
-      .pipe(map(messages => messages.map(message => this.normaliseMessage(message))));
+      .get<unknown>(buildTokenUrl('message', token, 'list'), { params })
+      .pipe(
+        map(response =>
+          this.extractMessageList(response).map(message => this.normaliseMessage(message))
+        )
+      );
   }
 
   create(payload: MessageCreateRequest): Observable<MessageItem> {
@@ -33,6 +41,24 @@ export class MessageService extends BaseApiService {
     return this.http
       .post<unknown>(buildTokenUrl('message', token), payload)
       .pipe(map(message => this.normaliseMessage(message, payload.content)));
+  }
+
+  private extractMessageList(response: unknown): unknown[] {
+    if (Array.isArray(response)) {
+      return response;
+    }
+
+    if (response && typeof response === 'object') {
+      const record = response as Record<string, unknown>;
+      const candidates = [record['results'], record['messages'], record['data'], record['items']];
+      for (const candidate of candidates) {
+        if (Array.isArray(candidate)) {
+          return candidate;
+        }
+      }
+    }
+
+    return [];
   }
 
   delete(id: number): Observable<void> {
