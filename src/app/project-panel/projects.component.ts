@@ -1,5 +1,5 @@
 import { AsyncPipe, NgFor, NgIf } from '@angular/common';
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, effect, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { VectorStoreService } from '../services/vectorstore.service';
 import { AssistantService } from '../services/assistant.service';
@@ -94,7 +94,45 @@ export class ProjectsComponent {
   });
 
   constructor() {
-    this.load();
+    effect(() => {
+      if (!this.state.workspaceReady()) {
+        this.projects.set([]);
+        this.documents.set([]);
+        this.selectedDocuments.set([]);
+        return;
+      }
+      const subscription = combineLatest([this.vectorStoreService.list(), this.assistantService.list()]).subscribe({
+        next: ([stores, assistants]) => {
+          const mapped = stores
+            .map(store => {
+              const assistant = this.findAssistantForStore(assistants, store.id);
+              return assistant ? { store, assistant } : null;
+            })
+            .filter((value): value is { store: VectorStore; assistant: Assistant } => value !== null);
+          if (mapped.length) {
+            this.projects.set(mapped);
+          } else {
+            const store = this.state.currentVectorStore();
+            const assistant = this.state.currentAssistant();
+            if (store && assistant && this.resolveAssistantStoreId(assistant) === store.id) {
+              this.projects.set([{ store, assistant }]);
+            } else {
+              this.projects.set([]);
+            }
+          }
+          if (mapped.length && !this.state.currentVectorStore()) {
+            this.setActive(mapped[0]);
+          }
+        },
+        error: error => {
+          console.error('Failed to load projects', error);
+          this.notifications.push('error', 'Unable to load existing projects.');
+        }
+      });
+      this.loadDocuments(this.state.currentVectorStore()?.id ?? undefined);
+      this.refreshDocumentLinks();
+      return () => subscription.unsubscribe();
+    });
   }
 
   openCreate(): void {
@@ -173,39 +211,6 @@ export class ProjectsComponent {
         }
       });
     }
-  }
-
-  private load(): void {
-    combineLatest([this.vectorStoreService.list(), this.assistantService.list()]).subscribe({
-      next: ([stores, assistants]) => {
-        const mapped = stores
-          .map(store => {
-            const assistant = this.findAssistantForStore(assistants, store.id);
-            return assistant ? { store, assistant } : null;
-          })
-          .filter((value): value is { store: VectorStore; assistant: Assistant } => value !== null);
-        if (mapped.length) {
-          this.projects.set(mapped);
-        } else {
-          const store = this.state.currentVectorStore();
-          const assistant = this.state.currentAssistant();
-          if (store && assistant && this.resolveAssistantStoreId(assistant) === store.id) {
-            this.projects.set([{ store, assistant }]);
-          } else {
-            this.projects.set([]);
-          }
-        }
-        if (mapped.length && !this.state.currentVectorStore()) {
-          this.setActive(mapped[0]);
-        }
-      },
-      error: error => {
-        console.error('Failed to load projects', error);
-        this.notifications.push('error', 'Unable to load existing projects.');
-      }
-    });
-    this.loadDocuments(this.state.currentVectorStore()?.id ?? undefined);
-    this.refreshDocumentLinks();
   }
 
   private loadDocuments(vectorStoreId?: string): void {

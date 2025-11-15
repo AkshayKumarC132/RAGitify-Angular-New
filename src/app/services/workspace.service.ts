@@ -23,16 +23,19 @@ export class WorkspaceService {
       return of(void 0);
     }
     if (!this.bootstrap$) {
+      this.state.setWorkspaceReady(false);
       const pipeline = this.ensureVectorStore()
         .pipe(
           switchMap(store => this.ensureAssistant(store)),
           switchMap(({ store, assistant }) => this.ensureThread(store, assistant)),
+          tap(() => this.state.setWorkspaceReady(true)),
           map(() => void 0),
           shareReplay(1)
         );
       this.bootstrap$ = pipeline.pipe(
         catchError(error => {
           this.bootstrap$ = undefined;
+          this.state.setWorkspaceReady(false);
           return throwError(() => error);
         })
       );
@@ -42,6 +45,7 @@ export class WorkspaceService {
 
   reset(): void {
     this.bootstrap$ = undefined;
+    this.state.setWorkspaceReady(false);
   }
 
   private ensureVectorStore(): Observable<VectorStore> {

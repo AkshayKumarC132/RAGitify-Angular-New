@@ -108,6 +108,11 @@ export class SidebarComponent {
 
   constructor() {
     effect(() => {
+      if (!this.state.workspaceReady()) {
+        this.threadsSignal.set([]);
+        this.filteredThreads.set([]);
+        return;
+      }
       const vectorStore = this.state.currentVectorStore();
       const subscription = this.threadService.list(vectorStore?.id).subscribe(threads => {
         this.threadsSignal.set(threads);

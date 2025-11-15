@@ -1,8 +1,8 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable, signal } from '@angular/core';
 import { Router } from '@angular/router';
-import { finalize, tap } from 'rxjs/operators';
-import { Observable } from 'rxjs';
+import { catchError, finalize, tap } from 'rxjs/operators';
+import { Observable, of } from 'rxjs';
 import { AuthResponse, LoginRequest, ProtectedUserResponse, RegisterRequest } from '../models/auth.model';
 import { GlobalState } from '../state/global.state';
 import { buildPublicUrl, buildTokenUrl } from '../utils/api-url';
@@ -62,6 +62,17 @@ export class AuthService {
     try {
       const parsed = JSON.parse(raw) as AuthResponse;
       this.state.setSession(parsed.token, parsed.user);
+      this.state.resetWorkspace();
+      this.workspace.reset();
+      this.workspace
+        .bootstrap()
+        .pipe(
+          catchError(error => {
+            console.error('Failed to bootstrap workspace from stored session', error);
+            return of(void 0);
+          })
+        )
+        .subscribe();
       return true;
     } catch (error) {
       console.error('Failed to parse session', error);
@@ -71,9 +82,21 @@ export class AuthService {
   }
 
   private persistSession(response: AuthResponse): void {
+    this.state.resetWorkspace();
+    this.workspace.reset();
     this.state.setSession(response.token, response.user);
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(response));
-    this.router.navigateByUrl('/chat');
+    this.workspace
+      .bootstrap()
+      .pipe(
+        catchError(error => {
+          console.error('Workspace bootstrap failed after authentication', error);
+          return of(void 0);
+        })
+      )
+      .subscribe(() => {
+        this.router.navigateByUrl('/chat');
+      });
   }
 
   clearSession(): void {

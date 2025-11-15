@@ -31,7 +31,7 @@ import { NotificationService } from '../services/notification.service';
             <button
               class="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
               type="submit"
-              [disabled]="state.uploading() || (!selectedFile && !form.value.s3_file_url)"
+              [disabled]="!state.workspaceReady() || state.uploading() || (!selectedFile && !form.value.s3_file_url)"
             >
               Ingest document
             </button>
@@ -67,7 +67,12 @@ import { NotificationService } from '../services/notification.service';
               </tr>
             </tbody>
           </table>
-          <p *ngIf="documents().length === 0" class="py-10 text-center text-sm text-slate-400">No documents yet.</p>
+          <ng-container *ngIf="documents().length === 0">
+            <p *ngIf="state.workspaceReady(); else preparing" class="py-10 text-center text-sm text-slate-400">No documents yet.</p>
+            <ng-template #preparing>
+              <p class="py-10 text-center text-sm text-slate-400">Preparing your workspace…</p>
+            </ng-template>
+          </ng-container>
         </div>
       </section>
     </div>
@@ -89,6 +94,10 @@ export class LibraryComponent {
 
   constructor() {
     effect(() => {
+      if (!this.state.workspaceReady()) {
+        this.documents.set([]);
+        return;
+      }
       const store = this.state.currentVectorStore();
       this.loadDocuments(store?.id);
     });
@@ -100,9 +109,13 @@ export class LibraryComponent {
   }
 
   submit(): void {
+    if (!this.state.workspaceReady()) {
+      this.notifications.push('info', 'Workspace is still being prepared. Please try again in a moment.');
+      return;
+    }
     const vectorStore = this.state.currentVectorStore();
     if (!vectorStore) {
-      this.notifications.push('warning', 'Create a project with a vector store before uploading.');
+      this.notifications.push('warning', 'No vector store is available yet. Please create a project first.');
       return;
     }
     const hasFile = Boolean(this.selectedFile);

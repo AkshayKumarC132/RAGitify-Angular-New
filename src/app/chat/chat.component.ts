@@ -81,7 +81,11 @@ export class ChatComponent {
   readonly mode = signal<Mode>('normal');
   readonly model = signal('gpt-4o-mini');
   readonly models = ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'];
-  readonly ready = computed(() => Boolean(this.state.currentAssistant() && this.state.currentThread() && this.state.currentVectorStore()));
+  readonly ready = computed(
+    () =>
+      this.state.workspaceReady() &&
+      Boolean(this.state.currentAssistant() && this.state.currentThread() && this.state.currentVectorStore())
+  );
 
   constructor() {
     effect(() => {
