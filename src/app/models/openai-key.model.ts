@@ -8,6 +8,7 @@ export interface OpenAiKey {
   is_valid: boolean;
   is_active: boolean;
   created_at: string;
+  masked_key?: string;
 }
 
 export interface OpenAiKeyCreateRequest {
