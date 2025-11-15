@@ -4,7 +4,9 @@ export interface Assistant {
   instructions?: string;
   model?: string;
   tools?: AssistantTool[];
+  vector_store?: string | null;
   vector_store_id?: string | null;
+  vector_store_id_read?: string | null;
   created_at: string;
   updated_at: string;
 }

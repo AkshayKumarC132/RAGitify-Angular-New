@@ -1,5 +1,5 @@
 import { AsyncPipe, DatePipe, NgFor, NgIf } from '@angular/common';
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, effect, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { interval, startWith, switchMap, takeWhile, tap } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -88,7 +88,10 @@ export class LibraryComponent {
   });
 
   constructor() {
-    this.loadDocuments();
+    effect(() => {
+      const store = this.state.currentVectorStore();
+      this.loadDocuments(store?.id);
+    });
   }
 
   handleFile(event: Event): void {
@@ -116,7 +119,7 @@ export class LibraryComponent {
           this.pollStatus(response.document_id);
           this.selectedFile = null;
           this.form.reset();
-          this.loadDocuments();
+          this.loadDocuments(vectorStore.id);
           this.notifications.push('success', 'Document submitted for ingestion.');
         },
         error: error => {
@@ -130,7 +133,8 @@ export class LibraryComponent {
   remove(doc: DocumentItem): void {
     this.documentService.delete(doc.id).subscribe({
       next: () => {
-        this.loadDocuments();
+        const store = this.state.currentVectorStore();
+        this.loadDocuments(store?.id);
         this.notifications.push('success', 'Document removed.');
       },
       error: error => {
@@ -140,9 +144,8 @@ export class LibraryComponent {
     });
   }
 
-  private loadDocuments(): void {
-    const vectorStore = this.state.currentVectorStore();
-    this.documentService.list(vectorStore?.id ?? undefined).subscribe({
+  private loadDocuments(vectorStoreId?: string | null): void {
+    this.documentService.list(vectorStoreId ?? undefined).subscribe({
       next: items => {
         this.documents.set(items);
       },
@@ -162,14 +165,15 @@ export class LibraryComponent {
         takeUntilDestroyed()
       )
       .subscribe({
-        next: status => {
-          if (['completed', 'failed'].includes(status.status)) {
-            this.state.setUploading(false);
-            this.loadDocuments();
-            if (status.status === 'failed') {
-              this.notifications.push('error', 'Document ingestion failed.');
+          next: status => {
+            if (['completed', 'failed'].includes(status.status)) {
+              this.state.setUploading(false);
+              const store = this.state.currentVectorStore();
+              this.loadDocuments(store?.id);
+              if (status.status === 'failed') {
+                this.notifications.push('error', 'Document ingestion failed.');
+              }
             }
-          }
         },
         error: error => {
           console.error('Document status polling failed', error);

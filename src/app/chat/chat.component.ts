@@ -1,5 +1,5 @@
 import { AsyncPipe, DatePipe, NgFor, NgIf } from '@angular/common';
-import { ChangeDetectionStrategy, Component, effect, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { EMPTY, interval, of, startWith, switchMap, takeWhile, tap } from 'rxjs';
 import { catchError } from 'rxjs/operators';
@@ -8,7 +8,6 @@ import { ChatBarComponent } from '../chatbar/chat-bar.component';
 import { MessageBubbleComponent } from './message-bubble.component';
 import { RunStatusIndicatorComponent } from './run-status-indicator.component';
 import { GlobalState } from '../state/global.state';
-import { VectorStoreService } from '../services/vectorstore.service';
 import { AssistantService } from '../services/assistant.service';
 import { ThreadService } from '../services/thread.service';
 import { MessageService } from '../services/message.service';
@@ -16,8 +15,6 @@ import { RunService } from '../services/run.service';
 import { NotificationService } from '../services/notification.service';
 import { ThreadItem } from '../models/thread.model';
 import { Run } from '../models/run.model';
-import { VectorStore } from '../models/vector-store.model';
-import { Assistant } from '../models/assistant.model';
 
 @Component({
   selector: 'app-chat',
@@ -49,16 +46,24 @@ import { Assistant } from '../models/assistant.model';
           </select>
         </div>
       </header>
-      <section class="flex-1 overflow-y-auto px-6 py-4 scrollbar-thin">
-        <div class="mx-auto flex max-w-3xl flex-col gap-6">
-          <app-message-bubble *ngFor="let message of state.messages()" [message]="message" />
-        </div>
-      </section>
+      <ng-container *ngIf="ready(); else preparing">
+        <section class="flex-1 overflow-y-auto px-6 py-4 scrollbar-thin">
+          <div class="mx-auto flex max-w-3xl flex-col gap-6">
+            <app-message-bubble *ngFor="let message of state.messages()" [message]="message" />
+          </div>
+        </section>
+      </ng-container>
+      <ng-template #preparing>
+        <section class="flex flex-1 items-center justify-center px-6 py-4 text-sm text-slate-400">
+          Preparing your workspace…
+        </section>
+      </ng-template>
       <footer class="border-t border-white/5 px-6 py-4">
-        <app-chat-bar [disabled]="state.uploading() || isBusy()" (send)="handleSend($event)" />
+        <app-chat-bar [disabled]="!ready() || state.uploading() || isBusy()" (send)="handleSend($event)" />
         <p *ngIf="state.uploading()" class="mt-2 text-xs text-amber-300">
           Upload in progress — chat disabled until ingestion completes
         </p>
+        <p *ngIf="!ready()" class="mt-2 text-xs text-slate-400">Preparing chat workspace…</p>
       </footer>
     </div>
   `,
@@ -66,7 +71,6 @@ import { Assistant } from '../models/assistant.model';
 })
 export class ChatComponent {
   readonly state = inject(GlobalState);
-  private readonly vectorStoreService = inject(VectorStoreService);
   private readonly assistantService = inject(AssistantService);
   private readonly threadService = inject(ThreadService);
   private readonly messageService = inject(MessageService);
@@ -77,10 +81,9 @@ export class ChatComponent {
   readonly mode = signal<Mode>('normal');
   readonly model = signal('gpt-4o-mini');
   readonly models = ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'];
+  readonly ready = computed(() => Boolean(this.state.currentAssistant() && this.state.currentThread() && this.state.currentVectorStore()));
 
   constructor() {
-    this.bootstrap();
-
     effect(() => {
       const thread = this.state.currentThread();
       if (thread) {
@@ -167,69 +170,6 @@ export class ChatComponent {
         this.startMessagePolling(run.thread);
         this.monitorRun(run);
       });
-  }
-
-  private bootstrap(): void {
-    effect(() => {
-      if (!this.state.sessionToken()) {
-        return;
-      }
-      this.ensureVectorStore()
-        .pipe(
-          switchMap(store => this.ensureAssistant(store)),
-          switchMap(result => this.ensureThread(result)),
-          catchError(error => {
-            console.error('Failed to bootstrap chat workspace', error);
-            this.notifications.push('error', 'Unable to initialize your chat workspace.');
-            return EMPTY;
-          }),
-          takeUntilDestroyed()
-        )
-        .subscribe(({ thread }) => this.state.updateThread(thread));
-    });
-  }
-
-  private ensureVectorStore() {
-    const current = this.state.currentVectorStore();
-    if (current) {
-      return of(current);
-    }
-    return this.vectorStoreService
-      .create({ name: 'Default Vector Store' })
-      .pipe(
-        tap(store => this.state.updateVectorStore(store))
-      );
-  }
-
-  private ensureAssistant(store: VectorStore) {
-    const existing = this.state.currentAssistant();
-    if (existing) {
-      return of({ store, assistant: existing });
-    }
-    return this.assistantService
-      .create({
-        name: 'RAGitify Assistant',
-        instructions: "You are a helpful assistant that uses the user's knowledge base.",
-        model: this.model(),
-        vector_store_id: store.id
-      })
-      .pipe(
-        tap(assistant => this.state.updateAssistant(assistant)),
-        switchMap(assistant => of({ store, assistant }))
-      );
-  }
-
-  private ensureThread(data: { store: VectorStore; assistant: Assistant }) {
-    const currentThread = this.state.currentThread();
-    if (currentThread) {
-      return of({ thread: currentThread });
-    }
-    return this.threadService
-      .create({ title: 'New conversation', vector_store_id: data.store.id })
-      .pipe(
-        tap(thread => this.state.updateThread(thread)),
-        switchMap(thread => of({ thread }))
-      );
   }
 
   private loadMessages(threadId: string): void {

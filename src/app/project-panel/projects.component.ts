@@ -11,6 +11,7 @@ import { DocumentItem } from '../models/document.model';
 import { DocumentAccessService } from '../services/document-access.service';
 import { NotificationService } from '../services/notification.service';
 import { DocumentAccess } from '../models/document-access.model';
+import { ThreadService } from '../services/thread.service';
 import { combineLatest, of, switchMap } from 'rxjs';
 
 @Component({
@@ -77,6 +78,7 @@ export class ProjectsComponent {
   private readonly documentService = inject(DocumentService);
   private readonly documentAccessService = inject(DocumentAccessService);
   private readonly notifications = inject(NotificationService);
+  private readonly threadService = inject(ThreadService);
   private readonly state = inject(GlobalState);
   private readonly fb = inject(FormBuilder);
 
@@ -130,12 +132,15 @@ export class ProjectsComponent {
   }
 
   setActive(project: { store: VectorStore; assistant: Assistant }): void {
+    this.state.setProjectId(project.store.id);
     this.state.updateVectorStore(project.store);
     this.state.updateAssistant(project.assistant);
     this.state.updateThread(null);
+    this.state.setMessages([]);
     this.loadDocuments(project.store.id);
     this.refreshDocumentLinks();
     this.selectedDocuments.set([]);
+    this.ensureThread(project.store.id);
   }
 
   toggleDoc(id: string, checked: boolean): void {
@@ -175,11 +180,21 @@ export class ProjectsComponent {
       next: ([stores, assistants]) => {
         const mapped = stores
           .map(store => {
-            const assistant = assistants.find(item => item.vector_store_id === store.id);
+            const assistant = this.findAssistantForStore(assistants, store.id);
             return assistant ? { store, assistant } : null;
           })
           .filter((value): value is { store: VectorStore; assistant: Assistant } => value !== null);
-        this.projects.set(mapped);
+        if (mapped.length) {
+          this.projects.set(mapped);
+        } else {
+          const store = this.state.currentVectorStore();
+          const assistant = this.state.currentAssistant();
+          if (store && assistant && this.resolveAssistantStoreId(assistant) === store.id) {
+            this.projects.set([{ store, assistant }]);
+          } else {
+            this.projects.set([]);
+          }
+        }
         if (mapped.length && !this.state.currentVectorStore()) {
           this.setActive(mapped[0]);
         }
@@ -217,5 +232,41 @@ export class ProjectsComponent {
         this.notifications.push('error', 'Unable to load linked documents.');
       }
     });
+  }
+
+  private ensureThread(storeId: string): void {
+    this.threadService
+      .list(storeId)
+      .pipe(
+        switchMap(threads => {
+          if (threads.length) {
+            return of(threads[0]);
+          }
+          return this.threadService.create({ vector_store_id: storeId, title: 'New conversation' });
+        })
+      )
+      .subscribe({
+        next: thread => this.state.updateThread(thread),
+        error: error => {
+          console.error('Failed to prepare thread for project', error);
+          this.notifications.push('error', 'Unable to prepare a chat thread for this project.');
+        }
+      });
+  }
+
+  private findAssistantForStore(assistants: Assistant[], storeId: string): Assistant | null {
+    const assistant = assistants.find(item => this.resolveAssistantStoreId(item) === storeId);
+    if (assistant) {
+      return assistant;
+    }
+    const activeAssistant = this.state.currentAssistant();
+    if (activeAssistant && this.resolveAssistantStoreId(activeAssistant) === storeId) {
+      return activeAssistant;
+    }
+    return null;
+  }
+
+  private resolveAssistantStoreId(assistant: Assistant): string | null {
+    return assistant.vector_store_id ?? assistant.vector_store_id_read ?? assistant.vector_store ?? null;
   }
 }

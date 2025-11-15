@@ -1,11 +1,16 @@
 import { AsyncPipe, NgIf } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { SidebarComponent } from '../sidebar/sidebar.component';
 import { ProjectPanelComponent } from '../project-panel/project-panel.component';
 import { ToastContainerComponent } from '../components/toast-container/toast-container.component';
 import { GlobalState } from '../state/global.state';
 import { AuthService } from '../services/auth.service';
+import { WorkspaceService } from '../services/workspace.service';
+import { NotificationService } from '../services/notification.service';
+import { EMPTY } from 'rxjs';
+import { catchError } from 'rxjs/operators';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 @Component({
   selector: 'app-main-layout',
@@ -37,6 +42,8 @@ import { AuthService } from '../services/auth.service';
 export class MainLayoutComponent {
   private readonly state = inject(GlobalState);
   private readonly auth = inject(AuthService);
+  private readonly workspace = inject(WorkspaceService);
+  private readonly notifications = inject(NotificationService);
 
   readonly heading = computed(() => {
     const route = location.pathname;
@@ -56,6 +63,25 @@ export class MainLayoutComponent {
     const user = this.state.currentUser();
     return user ? `Welcome back, ${user.first_name ?? user.email}` : 'Welcome to RAGitify';
   });
+
+  constructor() {
+    effect(() => {
+      if (!this.state.sessionToken()) {
+        return;
+      }
+      this.workspace
+        .bootstrap()
+        .pipe(
+          catchError(error => {
+            console.error('Workspace bootstrap failed', error);
+            this.notifications.push('error', 'Unable to prepare your workspace.');
+            return EMPTY;
+          }),
+          takeUntilDestroyed()
+        )
+        .subscribe();
+    });
+  }
 
   logout(): void {
     this.auth.logout();

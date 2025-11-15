@@ -6,6 +6,7 @@ import { Observable } from 'rxjs';
 import { AuthResponse, LoginRequest, ProtectedUserResponse, RegisterRequest } from '../models/auth.model';
 import { GlobalState } from '../state/global.state';
 import { buildPublicUrl, buildTokenUrl } from '../utils/api-url';
+import { WorkspaceService } from './workspace.service';
 
 const STORAGE_KEY = 'ragitify_session';
 
@@ -14,6 +15,7 @@ export class AuthService {
   private readonly http = inject(HttpClient);
   private readonly state = inject(GlobalState);
   private readonly router = inject(Router);
+  private readonly workspace = inject(WorkspaceService);
   readonly pending = signal(false);
 
   register(payload: RegisterRequest): Observable<AuthResponse> {
@@ -76,6 +78,8 @@ export class AuthService {
 
   clearSession(): void {
     this.state.setSession(null, null);
+    this.state.resetWorkspace();
+    this.workspace.reset();
     sessionStorage.removeItem(STORAGE_KEY);
     this.router.navigateByUrl('/auth');
   }

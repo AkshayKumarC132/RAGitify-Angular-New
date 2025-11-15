@@ -41,6 +41,17 @@ export class GlobalState {
     this._currentProjectId.set(projectId);
   }
 
+  resetWorkspace(): void {
+    this._currentProjectId.set(null);
+    this._currentVectorStore.set(null);
+    this._currentAssistant.set(null);
+    this._currentThread.set(null);
+    this._messages.set([]);
+    this._uploading.set(false);
+    this._runStatus.set(null);
+    this._activeRun.set(null);
+  }
+
   updateVectorStore(store: VectorStore | null): void {
     this._currentVectorStore.set(store);
   }
