@@ -109,7 +109,7 @@ export class WorkspaceService {
           if (thread) {
             return of(thread);
           }
-          return this.threadService.create({ title: 'New conversation', vector_store_id: store.id });
+          return this.threadService.create({ vector_store_id: store.id });
         }),
         tap(thread => this.state.updateThread(thread)),
         map(thread => ({ store, assistant, thread }))

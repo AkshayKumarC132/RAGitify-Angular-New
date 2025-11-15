@@ -511,7 +511,7 @@ export class ProjectsComponent {
           if (threads.length) {
             return of(threads[0]);
           }
-          return this.threadService.create({ vector_store_id: storeId, title: 'New conversation' });
+          return this.threadService.create({ vector_store_id: storeId });
         }),
         takeUntilDestroyed()
       )

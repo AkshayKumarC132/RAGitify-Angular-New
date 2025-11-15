@@ -335,7 +335,7 @@ export class ProjectPanelComponent {
     if (!store) {
       return;
     }
-    this.threadService.create({ vector_store_id: store.id, title: 'New conversation' }).subscribe({
+    this.threadService.create({ vector_store_id: store.id }).subscribe({
       next: thread => {
         this.notifications.push('success', 'Thread created.');
         this.threads.update(list => [thread, ...list]);

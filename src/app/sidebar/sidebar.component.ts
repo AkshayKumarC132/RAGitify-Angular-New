@@ -146,7 +146,6 @@ export class SidebarComponent {
     }
     this.threadService
       .create({
-        title: 'New conversation',
         vector_store_id: vectorStore.id
       })
       .subscribe(thread => {

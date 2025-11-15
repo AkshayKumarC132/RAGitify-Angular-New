@@ -1,5 +1,5 @@
 import { AsyncPipe, DatePipe, NgClass, NgFor, NgIf } from '@angular/common';
-import { ChangeDetectionStrategy, Component, effect, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnDestroy, effect, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { FormsModule } from '@angular/forms';
 import { GlobalState } from '../state/global.state';
@@ -9,6 +9,7 @@ import { VectorStoreService } from '../services/vectorstore.service';
 import { NotificationService } from '../services/notification.service';
 import { ThreadItem } from '../models/thread.model';
 import { MessageItem } from '../models/message.model';
+import { Subscription, switchMap, timer } from 'rxjs';
 import { VectorStore } from '../models/vector-store.model';
 
 @Component({
@@ -68,6 +69,9 @@ import { VectorStore } from '../models/vector-store.model';
               <p class="mt-2 whitespace-pre-wrap text-sm text-slate-200">{{ message.content }}</p>
             </article>
             <p *ngIf="messages().length === 0" class="py-10 text-center text-sm text-slate-400">No messages yet.</p>
+            <p *ngIf="assistantPending()" class="py-4 text-center text-xs uppercase tracking-widest text-slate-400 animate-pulse">
+              Waiting for assistant response…
+            </p>
           </div>
         </div>
         <footer class="border-t border-white/10 px-6 py-4">
@@ -93,12 +97,8 @@ import { VectorStore } from '../models/vector-store.model';
     <section *ngIf="showThreadModal()" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur">
       <div class="w-full max-w-md rounded-2xl border border-white/10 bg-slate-950/95 p-6 shadow-2xl">
         <h3 class="text-lg font-semibold">Create thread</h3>
-        <p class="mt-1 text-sm text-slate-400">Provide a title and choose a vector store.</p>
+        <p class="mt-1 text-sm text-slate-400">Choose a vector store for the new thread.</p>
         <form [formGroup]="threadForm" (ngSubmit)="createThread()" class="mt-4 space-y-4">
-          <div>
-            <label class="text-xs uppercase tracking-widest text-slate-500">Title</label>
-            <input formControlName="title" class="mt-1 w-full rounded-lg border border-white/10 bg-slate-900/70 px-3 py-2 text-sm" />
-          </div>
           <div>
             <label class="text-xs uppercase tracking-widest text-slate-500">Vector store</label>
             <select formControlName="vector_store_id" class="mt-1 w-full rounded-lg border border-white/10 bg-slate-900/70 px-3 py-2 text-sm">
@@ -122,7 +122,7 @@ import { VectorStore } from '../models/vector-store.model';
   `,
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class GeneralChatComponent {
+export class GeneralChatComponent implements OnDestroy {
   private readonly state = inject(GlobalState);
   private readonly threadService = inject(ThreadService);
   private readonly messageService = inject(MessageService);
@@ -136,11 +136,14 @@ export class GeneralChatComponent {
   readonly messages = signal<MessageItem[]>([]);
   readonly vectorStores = signal<VectorStore[]>([]);
   readonly showThreadModal = signal(false);
+  readonly assistantPending = signal(false);
+
+  private assistantPolling: Subscription | null = null;
+  private lastKnownAssistantIds = new Set<number>();
 
   threadQuery = '';
 
   readonly threadForm = this.fb.group({
-    title: ['', Validators.required],
     vector_store_id: ['', Validators.required]
   });
 
@@ -154,6 +157,7 @@ export class GeneralChatComponent {
         this.threads.set([]);
         this.filteredThreads.set([]);
         this.messages.set([]);
+        this.stopAssistantPolling();
         return;
       }
       this.loadThreads();
@@ -162,6 +166,7 @@ export class GeneralChatComponent {
 
     effect(() => {
       const thread = this.selectedThread();
+      this.stopAssistantPolling();
       if (thread) {
         this.loadMessages(thread.id);
       } else {
@@ -170,9 +175,13 @@ export class GeneralChatComponent {
     });
   }
 
+  ngOnDestroy(): void {
+    this.stopAssistantPolling();
+  }
+
   openThreadModal(): void {
     const defaultStore = this.vectorStores()[0]?.id ?? '';
-    this.threadForm.reset({ title: '', vector_store_id: defaultStore });
+    this.threadForm.reset({ vector_store_id: defaultStore });
     this.showThreadModal.set(true);
   }
 
@@ -188,7 +197,6 @@ export class GeneralChatComponent {
     const payload = this.threadForm.getRawValue();
     this.threadService
       .create({
-        title: payload.title ?? 'New thread',
         vector_store_id: payload.vector_store_id!
       })
       .subscribe({
@@ -221,11 +229,18 @@ export class GeneralChatComponent {
     if (!thread || !content.trim()) {
       return;
     }
+    const knownAssistantIds = new Set(
+      this.messages()
+        .filter(message => message.role === 'assistant')
+        .map(message => message.id)
+    );
     this.messageService.create({ thread_id: thread.id, content }).subscribe({
       next: message => {
         this.notifications.push('success', 'Message sent.');
         this.messageForm.reset({ content: '' });
         this.messages.update(list => [...list, message]);
+        this.lastKnownAssistantIds = knownAssistantIds;
+        this.startAssistantPolling(thread.id);
       },
       error: error => {
         console.error('Failed to send message', error);
@@ -259,7 +274,16 @@ export class GeneralChatComponent {
 
   private loadMessages(threadId: string): void {
     this.messageService.list(threadId).subscribe({
-      next: messages => this.messages.set(messages),
+      next: messages => {
+        this.messages.set(messages);
+        this.updateLastKnownAssistantIds(messages);
+        const lastMessage = messages.at(-1);
+        if (lastMessage?.role === 'user') {
+          this.startAssistantPolling(threadId);
+        } else {
+          this.stopAssistantPolling();
+        }
+      },
       error: error => {
         console.error('Failed to load messages', error);
         this.notifications.push('error', 'Unable to load messages.');
@@ -280,5 +304,39 @@ export class GeneralChatComponent {
         this.notifications.push('error', 'Unable to load vector stores.');
       }
     });
+  }
+
+  private startAssistantPolling(threadId: string): void {
+    this.stopAssistantPolling();
+    this.assistantPending.set(true);
+    this.assistantPolling = timer(1000, 2000)
+      .pipe(switchMap(() => this.messageService.list(threadId)))
+      .subscribe({
+        next: messages => {
+          this.messages.set(messages);
+          const hasNewAssistant = messages.some(message => message.role === 'assistant' && !this.lastKnownAssistantIds.has(message.id));
+          if (hasNewAssistant) {
+            this.updateLastKnownAssistantIds(messages);
+            this.stopAssistantPolling();
+          }
+        },
+        error: error => {
+          console.error('Failed to poll messages', error);
+          this.notifications.push('error', 'Unable to retrieve assistant response.');
+          this.stopAssistantPolling();
+        }
+      });
+  }
+
+  private stopAssistantPolling(): void {
+    if (this.assistantPolling) {
+      this.assistantPolling.unsubscribe();
+      this.assistantPolling = null;
+    }
+    this.assistantPending.set(false);
+  }
+
+  private updateLastKnownAssistantIds(messages: MessageItem[]): void {
+    this.lastKnownAssistantIds = new Set(messages.filter(message => message.role === 'assistant').map(message => message.id));
   }
 }
