@@ -61,7 +61,7 @@ import { combineLatest, of, switchMap } from 'rxjs';
           <label *ngFor="let doc of documents()" class="flex items-start gap-3 rounded-xl border border-white/10 bg-slate-950/60 p-4">
             <input type="checkbox" [checked]="selectedDocuments().includes(doc.id)" (change)="toggleDoc(doc.id, $event.target.checked)" />
             <div>
-              <p class="font-medium">{{ doc.name }}</p>
+              <p class="font-medium">{{ doc.title }}</p>
               <p class="text-xs text-slate-400">Status: {{ doc.status }}</p>
             </div>
           </label>
@@ -102,7 +102,7 @@ export class ProjectsComponent {
     }
     const value = this.projectForm.getRawValue();
     this.vectorStoreService
-      .create({ name: value.name!, description: 'Project vector store' })
+      .create({ name: value.name! })
       .pipe(
         switchMap(store =>
           this.assistantService
@@ -110,7 +110,7 @@ export class ProjectsComponent {
               name: `${value.name} Assistant`,
               instructions: value.instructions!,
               model: value.model!,
-              vector_store: store.id
+              vector_store_id: store.id
             })
             .pipe(switchMap(assistant => of({ store, assistant })))
         )
@@ -133,18 +133,18 @@ export class ProjectsComponent {
     this.state.updateVectorStore(project.store);
     this.state.updateAssistant(project.assistant);
     this.state.updateThread(null);
-    this.loadDocuments();
+    this.loadDocuments(project.store.id);
     this.refreshDocumentLinks();
     this.selectedDocuments.set([]);
   }
 
   toggleDoc(id: string, checked: boolean): void {
-    const assistant = this.state.currentAssistant();
-    if (!assistant) {
+    const store = this.state.currentVectorStore();
+    if (!store) {
       return;
     }
     if (checked) {
-      this.documentAccessService.create({ assistant_id: assistant.id, document_ids: [id] }).subscribe({
+      this.documentAccessService.create({ vector_store_id: store.id, document_ids: [id] }).subscribe({
         next: () => {
           this.selectedDocuments.update(list => [...new Set([...list, id])]);
           this.refreshDocumentLinks();
@@ -156,11 +156,7 @@ export class ProjectsComponent {
         }
       });
     } else {
-      const link = this.documentLinks().find(item => item.document === id && item.assistant === assistant.id);
-      if (!link) {
-        return;
-      }
-      this.documentAccessService.delete(link.id).subscribe({
+      this.documentAccessService.remove({ vector_store_id: store.id, document_ids: [id] }).subscribe({
         next: () => {
           this.selectedDocuments.update(list => list.filter(item => item !== id));
           this.refreshDocumentLinks();
@@ -179,7 +175,7 @@ export class ProjectsComponent {
       next: ([stores, assistants]) => {
         const mapped = stores
           .map(store => {
-            const assistant = assistants.find(item => item.vector_store === store.id);
+            const assistant = assistants.find(item => item.vector_store_id === store.id);
             return assistant ? { store, assistant } : null;
           })
           .filter((value): value is { store: VectorStore; assistant: Assistant } => value !== null);
@@ -193,12 +189,12 @@ export class ProjectsComponent {
         this.notifications.push('error', 'Unable to load existing projects.');
       }
     });
-    this.loadDocuments();
+    this.loadDocuments(this.state.currentVectorStore()?.id ?? undefined);
     this.refreshDocumentLinks();
   }
 
-  private loadDocuments(): void {
-    this.documentService.list().subscribe({
+  private loadDocuments(vectorStoreId?: string): void {
+    this.documentService.list(vectorStoreId).subscribe({
       next: items => this.documents.set(items),
       error: error => {
         console.error('Failed to load documents', error);
@@ -211,9 +207,9 @@ export class ProjectsComponent {
     this.documentAccessService.list().subscribe({
       next: links => {
         this.documentLinks.set(links);
-        const assistant = this.state.currentAssistant();
-        if (assistant) {
-          this.selectedDocuments.set(links.filter(link => link.assistant === assistant.id).map(link => link.document));
+        const store = this.state.currentVectorStore();
+        if (store) {
+          this.selectedDocuments.set(links.filter(link => link.vector_store === store.id).map(link => link.document));
         }
       },
       error: error => {

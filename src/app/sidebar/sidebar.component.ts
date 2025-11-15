@@ -80,10 +80,10 @@ import { ThreadItem } from '../models/thread.model';
               <a
                 [routerLink]="['/chat', thread.id]"
                 class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-300 hover:bg-white/5"
-                [matTooltip]="collapsed() ? thread.title : ''"
+                [matTooltip]="collapsed() ? (thread.title ?? 'Untitled thread') : ''"
               >
                 <span class="material-icons text-lg">chat_bubble</span>
-                <span *ngIf="!collapsed()" class="truncate">{{ thread.title }}</span>
+                <span *ngIf="!collapsed()" class="truncate">{{ thread.title ?? 'Untitled thread' }}</span>
               </a>
             </li>
           </ul>
@@ -131,7 +131,6 @@ export class SidebarComponent {
     this.threadService
       .create({
         title: 'New conversation',
-        assistant_id: assistant.id,
         vector_store_id: vectorStore.id
       })
       .subscribe(thread => {
@@ -144,7 +143,7 @@ export class SidebarComponent {
   applyFilter(): void {
     const q = this.query.toLowerCase();
     const filtered = this.threadsSignal()
-      .filter(thread => thread.title.toLowerCase().includes(q))
+      .filter(thread => (thread.title ?? 'Untitled thread').toLowerCase().includes(q))
       .slice(0, 20);
     this.filteredThreads.set(filtered);
   }

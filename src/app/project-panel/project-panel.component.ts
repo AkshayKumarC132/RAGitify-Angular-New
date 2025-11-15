@@ -37,7 +37,7 @@ import { combineLatest } from 'rxjs';
           <h3 class="text-xs uppercase tracking-widest text-slate-500">Linked documents</h3>
           <ul class="mt-2 space-y-2 text-sm text-slate-300">
             <li *ngFor="let doc of documents()" class="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2">
-              {{ doc.name }}
+              {{ doc.title }}
             </li>
             <li *ngIf="documents().length === 0" class="text-xs text-slate-500">No documents linked yet.</li>
           </ul>
@@ -73,12 +73,16 @@ export class ProjectPanelComponent {
   private observeLinkedDocuments(): void {
     effect(() => {
       const assistant = this.state.currentAssistant();
-      if (!assistant) {
+      const store = this.state.currentVectorStore();
+      if (!assistant || !store) {
         this.documents.set([]);
         return;
       }
-      const subscription = combineLatest([this.documentService.list(), this.documentAccessService.list()]).subscribe(([docs, links]) => {
-        const linkedIds = new Set(links.filter(link => link.assistant === assistant.id).map(link => link.document));
+      const subscription = combineLatest([
+        this.documentService.list(store.id),
+        this.documentAccessService.list()
+      ]).subscribe(([docs, links]) => {
+        const linkedIds = new Set(links.filter(link => link.vector_store === store.id).map(link => link.document));
         this.documents.set(docs.filter(doc => linkedIds.has(doc.id)));
       });
       return () => subscription.unsubscribe();

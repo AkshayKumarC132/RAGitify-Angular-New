@@ -2,10 +2,11 @@ import { HttpClient } from '@angular/common/http';
 import { inject, Injectable, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { finalize, tap } from 'rxjs/operators';
-import { AuthResponse, LoginRequest, RegisterRequest } from '../models/auth.model';
+import { Observable } from 'rxjs';
+import { AuthResponse, LoginRequest, ProtectedUserResponse, RegisterRequest } from '../models/auth.model';
 import { GlobalState } from '../state/global.state';
+import { buildPublicUrl, buildTokenUrl } from '../utils/api-url';
 
-const API_BASE = 'http://127.0.0.1:8000/rag';
 const STORAGE_KEY = 'ragitify_session';
 
 @Injectable({ providedIn: 'root' })
@@ -15,34 +16,40 @@ export class AuthService {
   private readonly router = inject(Router);
   readonly pending = signal(false);
 
-  register(payload: RegisterRequest) {
+  register(payload: RegisterRequest): Observable<AuthResponse> {
     this.pending.set(true);
-    return this.http.post<AuthResponse>(`${API_BASE}/register/`, payload).pipe(
+    return this.http.post<AuthResponse>(buildPublicUrl('register'), payload).pipe(
       tap(response => this.persistSession(response)),
       finalize(() => this.pending.set(false))
     );
   }
 
-  login(payload: LoginRequest) {
+  login(payload: LoginRequest): Observable<AuthResponse> {
     this.pending.set(true);
-    return this.http.post<AuthResponse>(`${API_BASE}/login/`, payload).pipe(
+    return this.http.post<AuthResponse>(buildPublicUrl('login'), payload).pipe(
       tap(response => this.persistSession(response)),
       finalize(() => this.pending.set(false))
     );
   }
 
-  logout() {
+  logout(): void {
     const token = this.state.sessionToken();
     if (!token) {
       this.clearSession();
       return;
     }
-    this.http
-      .get<void>(`${API_BASE}/logout/${token}/`)
-      .subscribe({
-        next: () => this.clearSession(),
-        error: () => this.clearSession()
-      });
+    this.http.post<void>(buildTokenUrl('logout', token), {}).subscribe({
+      next: () => this.clearSession(),
+      error: () => this.clearSession()
+    });
+  }
+
+  fetchProtected(): Observable<ProtectedUserResponse> {
+    const token = this.state.sessionToken();
+    if (!token) {
+      throw new Error('Authentication token missing');
+    }
+    return this.http.get<ProtectedUserResponse>(buildTokenUrl('protected', token));
   }
 
   restoreSession(): boolean {

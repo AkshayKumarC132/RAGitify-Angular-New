@@ -1,14 +1,11 @@
 export interface ThreadItem {
   id: string;
-  title: string;
+  title: string | null;
   created_at: string;
-  updated_at: string;
-  vector_store?: string | null;
-  assistant?: string | null;
+  vector_store_id_read: string;
 }
 
 export interface ThreadCreateRequest {
+  vector_store_id: string;
   title?: string;
-  assistant_id?: string;
-  vector_store_id?: string;
 }

@@ -1,39 +1,58 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-import { DocumentIngestRequest, DocumentItem, DocumentStatusResponse } from '../models/document.model';
-import { buildUrl, buildUrlWithId } from '../utils/api-url';
+import { DocumentIngestRequest, DocumentIngestResponse, DocumentItem, DocumentStatusResponse } from '../models/document.model';
+import { buildTokenUrl, buildTokenUrlWithId } from '../utils/api-url';
 import { BaseApiService } from './base-api.service';
 
 @Injectable({ providedIn: 'root' })
 export class DocumentService extends BaseApiService {
   private readonly http = inject(HttpClient);
 
-  list(): Observable<DocumentItem[]> {
+  list(vectorStoreId?: string): Observable<DocumentItem[]> {
     const token = this.requireToken();
-    return this.http.get<DocumentItem[]>(buildUrl('/document/', token + '/list'));
+    let params = new HttpParams();
+    if (vectorStoreId) {
+      params = params.set('vector_store_id', vectorStoreId);
+    }
+    return this.http.get<DocumentItem[]>(buildTokenUrl('document', token, 'list'), { params });
   }
 
-  ingest(request: DocumentIngestRequest): Observable<DocumentItem> {
+  ingest(request: DocumentIngestRequest): Observable<DocumentIngestResponse> {
     const token = this.requireToken();
+    const hasFile = Boolean(request.file);
+    const hasUrl = Boolean(request.s3_file_url);
+    if ((hasFile && hasUrl) || (!hasFile && !hasUrl)) {
+      throw new Error('Exactly one of file or s3_file_url must be provided');
+    }
     const formData = new FormData();
     formData.append('vector_store_id', request.vector_store_id);
-    if (request.document) {
-      formData.append('document', request.document);
+    if (request.file) {
+      formData.append('file', request.file);
     }
-    if (request.s3_url) {
-      formData.append('s3_url', request.s3_url);
+    if (request.s3_file_url) {
+      formData.append('s3_file_url', request.s3_file_url);
     }
-    return this.http.post<DocumentItem>(buildUrl('/document/', token) + 'ingest/', formData);
+    return this.http.post<DocumentIngestResponse>(buildTokenUrl('document', token, 'ingest'), formData);
+  }
+
+  retrieve(id: string): Observable<DocumentItem> {
+    const token = this.requireToken();
+    return this.http.get<DocumentItem>(buildTokenUrlWithId('document', token, id));
+  }
+
+  update(id: string, payload: Partial<Pick<DocumentItem, 'title' | 'status'>>): Observable<DocumentItem> {
+    const token = this.requireToken();
+    return this.http.patch<DocumentItem>(buildTokenUrlWithId('document', token, id), payload);
   }
 
   delete(id: string): Observable<void> {
     const token = this.requireToken();
-    return this.http.delete<void>(buildUrlWithId('/document/', token, id));
+    return this.http.delete<void>(buildTokenUrlWithId('document', token, id));
   }
 
   status(id: string): Observable<DocumentStatusResponse> {
     const token = this.requireToken();
-    return this.http.get<DocumentStatusResponse>(buildUrlWithId('/document/', token, id) + 'status/');
+    return this.http.get<DocumentStatusResponse>(buildTokenUrlWithId('document', token, id, 'status'));
   }
 }

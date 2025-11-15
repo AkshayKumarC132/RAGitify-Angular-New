@@ -65,6 +65,26 @@ import { NotificationService } from '../services/notification.service';
                 />
               </div>
             </div>
+            <div class="space-y-2">
+              <label class="block text-sm font-medium text-slate-300">Tenant name</label>
+              <input
+                formControlName="tenant_name"
+                type="text"
+                class="w-full rounded-lg border border-white/10 bg-slate-950/80 px-4 py-2 text-sm text-white focus:border-primary focus:outline-none"
+                placeholder="acme-inc"
+                required
+              />
+            </div>
+            <div class="space-y-2">
+              <label class="block text-sm font-medium text-slate-300">Collection name</label>
+              <input
+                formControlName="collection_name"
+                type="text"
+                class="w-full rounded-lg border border-white/10 bg-slate-950/80 px-4 py-2 text-sm text-white focus:border-primary focus:outline-none"
+                placeholder="default_collection"
+              />
+              <p class="text-xs text-slate-400">Defaults to default_collection when left blank.</p>
+            </div>
           </ng-container>
           <button
             class="w-full rounded-lg bg-primary px-4 py-2 font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50"
@@ -89,7 +109,9 @@ export class LoginComponent {
     email: ['', [Validators.required, Validators.email]],
     password: ['', [Validators.required, Validators.minLength(6)]],
     first_name: [''],
-    last_name: ['']
+    last_name: [''],
+    tenant_name: [''],
+    collection_name: ['']
   });
 
   constructor() {
@@ -102,21 +124,16 @@ export class LoginComponent {
     });
 
     effect(() => {
-      const registerMode = this.mode() === 'register';
-      const first = this.form.get('first_name');
-      const last = this.form.get('last_name');
-      if (!first || !last) {
+      const tenant = this.form.get('tenant_name');
+      if (!tenant) {
         return;
       }
-      if (registerMode) {
-        first.addValidators(Validators.required);
-        last.addValidators(Validators.required);
+      if (this.mode() === 'register') {
+        tenant.addValidators(Validators.required);
       } else {
-        first.removeValidators(Validators.required);
-        last.removeValidators(Validators.required);
+        tenant.clearValidators();
       }
-      first.updateValueAndValidity({ emitEvent: false });
-      last.updateValueAndValidity({ emitEvent: false });
+      tenant.updateValueAndValidity({ emitEvent: false });
     });
   }
 
@@ -136,8 +153,10 @@ export class LoginComponent {
         : this.auth.register({
             email: value.email,
             password: value.password,
-            first_name: value.first_name,
-            last_name: value.last_name
+            tenant_name: value.tenant_name,
+            first_name: value.first_name || undefined,
+            last_name: value.last_name || undefined,
+            collection_name: value.collection_name || undefined
           });
 
     request$.subscribe({

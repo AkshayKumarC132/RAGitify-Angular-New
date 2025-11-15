@@ -144,7 +144,7 @@ export class ChatComponent {
     }
     this.state.setRunStatus('in_progress');
     this.messageService
-      .create({ thread_id: thread.id, role: 'user', content })
+      .create({ thread_id: thread.id, content })
       .pipe(
         switchMap(message => {
           this.state.appendMessage(message);
@@ -152,7 +152,7 @@ export class ChatComponent {
             thread_id: thread.id,
             assistant_id: assistant.id,
             mode: this.mode(),
-            instructions: content
+            message_id: message.id
           });
         }),
         catchError(error => {
@@ -195,7 +195,7 @@ export class ChatComponent {
       return of(current);
     }
     return this.vectorStoreService
-      .create({ name: 'Default Vector Store', description: 'Auto-created for chat' })
+      .create({ name: 'Default Vector Store' })
       .pipe(
         tap(store => this.state.updateVectorStore(store))
       );
@@ -209,9 +209,9 @@ export class ChatComponent {
     return this.assistantService
       .create({
         name: 'RAGitify Assistant',
-        instructions: 'You are a helpful assistant that uses the user\'s knowledge base.',
+        instructions: "You are a helpful assistant that uses the user's knowledge base.",
         model: this.model(),
-        vector_store: store.id
+        vector_store_id: store.id
       })
       .pipe(
         tap(assistant => this.state.updateAssistant(assistant)),
@@ -225,7 +225,7 @@ export class ChatComponent {
       return of({ thread: currentThread });
     }
     return this.threadService
-      .create({ title: 'New conversation', assistant_id: data.assistant.id, vector_store_id: data.store.id })
+      .create({ title: 'New conversation', vector_store_id: data.store.id })
       .pipe(
         tap(thread => this.state.updateThread(thread)),
         switchMap(thread => of({ thread }))

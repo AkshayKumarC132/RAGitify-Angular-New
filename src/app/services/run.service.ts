@@ -1,26 +1,45 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-import { Run, RunCreateRequest } from '../models/run.model';
-import { buildUrl, buildUrlWithId } from '../utils/api-url';
+import { Run, RunCreateRequest, ToolOutput } from '../models/run.model';
+import { buildTokenUrl, buildTokenUrlWithId } from '../utils/api-url';
 import { BaseApiService } from './base-api.service';
 
 @Injectable({ providedIn: 'root' })
 export class RunService extends BaseApiService {
   private readonly http = inject(HttpClient);
 
+  list(threadId?: string): Observable<Run[]> {
+    const token = this.requireToken();
+    let params = new HttpParams();
+    if (threadId) {
+      params = params.set('thread_id', threadId);
+    }
+    return this.http.get<Run[]>(buildTokenUrl('run', token, 'list'), { params });
+  }
+
   create(payload: RunCreateRequest): Observable<Run> {
     const token = this.requireToken();
-    return this.http.post<Run>(buildUrl('/run', token), payload);
+    return this.http.post<Run>(buildTokenUrl('run', token), payload);
   }
 
   retrieve(id: string): Observable<Run> {
     const token = this.requireToken();
-    return this.http.get<Run>(buildUrlWithId('/run', token, id));
+    return this.http.get<Run>(buildTokenUrlWithId('run', token, id));
   }
 
-  submitToolOutputs(id: string, outputs: unknown): Observable<Run> {
+  cancel(id: string): Observable<Run> {
     const token = this.requireToken();
-    return this.http.post<Run>(buildUrlWithId('/run', token, id) + 'submit-tool-outputs/', outputs);
+    return this.http.post<Run>(buildTokenUrlWithId('run', token, id, 'cancel'), {});
+  }
+
+  rerun(id: string): Observable<Run> {
+    const token = this.requireToken();
+    return this.http.post<Run>(buildTokenUrlWithId('run', token, id, 'rerun'), {});
+  }
+
+  submitToolOutputs(id: string, tool_outputs: ToolOutput[]): Observable<Run> {
+    const token = this.requireToken();
+    return this.http.post<Run>(buildTokenUrlWithId('run', token, id, 'submit-tool-outputs'), { tool_outputs });
   }
 }
