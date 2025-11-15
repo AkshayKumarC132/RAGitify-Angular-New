@@ -1,4 +1,4 @@
-const API_BASE = 'https://rag.xamplify.co/rag';
+const API_BASE = 'http://127.0.0.1:8000/rag';
 
 export function buildUrl(path: string, token: string): string {
   const normalized = path.startsWith('/') ? path : `/${path}`;

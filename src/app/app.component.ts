@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, effect, inject, signal } from '@angular/core';
 import { Router, RouterOutlet } from '@angular/router';
 import { NgIf } from '@angular/common';
 import { AuthService } from './services/auth.service';
@@ -29,16 +29,19 @@ export class AppComponent {
   readonly bootstrapped = signal(false);
 
   constructor() {
+    // Remove effect, use ngOnInit instead
+    this.initializeApp();
+  }
+
+  private initializeApp(): void {
     const hasSession = this.auth.restoreSession();
-    queueMicrotask(() => {
-      const currentPath = typeof window !== 'undefined' ? window.location.pathname : '/';
-      if (!hasSession && currentPath !== '/auth') {
-        this.router.navigateByUrl('/auth');
-      }
-      if (hasSession && (currentPath === '/' || currentPath === '/auth')) {
-        this.router.navigateByUrl('/chat');
-      }
+
+    if (!hasSession) {
+      this.router.navigateByUrl('/auth', { replaceUrl: true }).then(() => {
+        this.bootstrapped.set(true);
+      });
+    } else {
       this.bootstrapped.set(true);
-    });
+    }
   }
 }

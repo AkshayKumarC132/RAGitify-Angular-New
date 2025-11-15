@@ -11,21 +11,21 @@ export class VectorStoreService extends BaseApiService {
 
   list(): Observable<VectorStore[]> {
     const token = this.requireToken();
-    return this.http.get<VectorStore[]>(buildUrl('/vector-store', token));
+    return this.http.get<VectorStore[]>(buildUrl('/vector-store/', token + '/list'));
   }
 
   create(payload: VectorStoreCreateRequest): Observable<VectorStore> {
     const token = this.requireToken();
-    return this.http.post<VectorStore>(buildUrl('/vector-store', token), payload);
+    return this.http.post<VectorStore>(buildUrl('/vector-store/', token), payload);
   }
 
   retrieve(id: string): Observable<VectorStore> {
     const token = this.requireToken();
-    return this.http.get<VectorStore>(buildUrlWithId('/vector-store', token, id));
+    return this.http.get<VectorStore>(buildUrlWithId('/vector-store/', token, id));
   }
 
   delete(id: string): Observable<void> {
     const token = this.requireToken();
-    return this.http.delete<void>(buildUrlWithId('/vector-store', token, id));
+    return this.http.delete<void>(buildUrlWithId('/vector-store/', token, id));
   }
 }

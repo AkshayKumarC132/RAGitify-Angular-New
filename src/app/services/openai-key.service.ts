@@ -11,16 +11,16 @@ export class OpenaiKeyService extends BaseApiService {
 
   list(): Observable<OpenAiKey[]> {
     const token = this.requireToken();
-    return this.http.get<OpenAiKey[]>(buildUrl('/openai-key', token));
+    return this.http.get<OpenAiKey[]>(buildUrl('/openai-key/', token + '/list'));
   }
 
   create(payload: OpenAiKeyCreateRequest): Observable<OpenAiKey> {
     const token = this.requireToken();
-    return this.http.post<OpenAiKey>(buildUrl('/openai-key', token), payload);
+    return this.http.post<OpenAiKey>(buildUrl('/openai-key/', token), payload);
   }
 
   delete(id: string): Observable<void> {
     const token = this.requireToken();
-    return this.http.delete<void>(buildUrlWithId('/openai-key', token, id));
+    return this.http.delete<void>(buildUrlWithId('/openai-key/', token, id));
   }
 }

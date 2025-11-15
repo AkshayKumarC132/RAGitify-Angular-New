@@ -11,21 +11,21 @@ export class AssistantService extends BaseApiService {
 
   list(): Observable<Assistant[]> {
     const token = this.requireToken();
-    return this.http.get<Assistant[]>(buildUrl('/assistant', token));
+    return this.http.get<Assistant[]>(buildUrl('/assistant/', token+'/list'));
   }
 
   create(payload: AssistantCreateRequest): Observable<Assistant> {
     const token = this.requireToken();
-    return this.http.post<Assistant>(buildUrl('/assistant', token), payload);
+    return this.http.post<Assistant>(buildUrl('/assistant/', token), payload);
   }
 
   update(id: string, payload: Partial<AssistantCreateRequest>): Observable<Assistant> {
     const token = this.requireToken();
-    return this.http.put<Assistant>(buildUrlWithId('/assistant', token, id), payload);
+    return this.http.put<Assistant>(buildUrlWithId('/assistant/', token, id), payload);
   }
 
   delete(id: string): Observable<void> {
     const token = this.requireToken();
-    return this.http.delete<void>(buildUrlWithId('/assistant', token, id));
+    return this.http.delete<void>(buildUrlWithId('/assistant/', token, id));
   }
 }

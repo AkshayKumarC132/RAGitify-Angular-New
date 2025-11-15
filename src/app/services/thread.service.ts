@@ -15,16 +15,16 @@ export class ThreadService extends BaseApiService {
     if (vectorStoreId) {
       params = params.set('vector_store', vectorStoreId);
     }
-    return this.http.get<ThreadItem[]>(buildUrl('/thread', token), { params });
+    return this.http.get<ThreadItem[]>(buildUrl('/thread/', token + '/list'), { params });
   }
 
   create(payload: ThreadCreateRequest): Observable<ThreadItem> {
     const token = this.requireToken();
-    return this.http.post<ThreadItem>(buildUrl('/thread', token), payload);
+    return this.http.post<ThreadItem>(buildUrl('/thread/', token), payload);
   }
 
   retrieve(id: string): Observable<ThreadItem> {
     const token = this.requireToken();
-    return this.http.get<ThreadItem>(buildUrlWithId('/thread', token, id));
+    return this.http.get<ThreadItem>(buildUrlWithId('/thread/', token, id));
   }
 }

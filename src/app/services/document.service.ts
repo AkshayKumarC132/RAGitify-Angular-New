@@ -11,7 +11,7 @@ export class DocumentService extends BaseApiService {
 
   list(): Observable<DocumentItem[]> {
     const token = this.requireToken();
-    return this.http.get<DocumentItem[]>(buildUrl('/document', token));
+    return this.http.get<DocumentItem[]>(buildUrl('/document/', token + '/list'));
   }
 
   ingest(request: DocumentIngestRequest): Observable<DocumentItem> {
@@ -24,16 +24,16 @@ export class DocumentService extends BaseApiService {
     if (request.s3_url) {
       formData.append('s3_url', request.s3_url);
     }
-    return this.http.post<DocumentItem>(buildUrl('/document', token) + 'ingest/', formData);
+    return this.http.post<DocumentItem>(buildUrl('/document/', token) + 'ingest/', formData);
   }
 
   delete(id: string): Observable<void> {
     const token = this.requireToken();
-    return this.http.delete<void>(buildUrlWithId('/document', token, id));
+    return this.http.delete<void>(buildUrlWithId('/document/', token, id));
   }
 
   status(id: string): Observable<DocumentStatusResponse> {
     const token = this.requireToken();
-    return this.http.get<DocumentStatusResponse>(buildUrlWithId('/document', token, id) + 'status/');
+    return this.http.get<DocumentStatusResponse>(buildUrlWithId('/document/', token, id) + 'status/');
   }
 }

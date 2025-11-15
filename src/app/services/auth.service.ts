@@ -5,7 +5,7 @@ import { finalize, tap } from 'rxjs/operators';
 import { AuthResponse, LoginRequest, RegisterRequest } from '../models/auth.model';
 import { GlobalState } from '../state/global.state';
 
-const API_BASE = 'https://rag.xamplify.co/rag';
+const API_BASE = 'http://127.0.0.1:8000/rag';
 const STORAGE_KEY = 'ragitify_session';
 
 @Injectable({ providedIn: 'root' })
