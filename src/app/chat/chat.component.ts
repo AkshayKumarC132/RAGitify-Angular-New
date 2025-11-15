@@ -59,9 +59,15 @@ import { Run } from '../models/run.model';
         </section>
       </ng-template>
       <footer class="border-t border-white/5 px-6 py-4">
-        <app-chat-bar [disabled]="!ready() || state.uploading() || isBusy()" (send)="handleSend($event)" />
+        <app-chat-bar
+          [disabled]="!ready() || state.uploading() || state.projectChatLocked() || isBusy()"
+          (send)="handleSend($event)"
+        />
         <p *ngIf="state.uploading()" class="mt-2 text-xs text-amber-300">
           Upload in progress — chat disabled until ingestion completes
+        </p>
+        <p *ngIf="state.projectChatLocked() && !state.uploading()" class="mt-2 text-xs text-amber-300">
+          Document selection in progress — chat is temporarily unavailable
         </p>
         <p *ngIf="!ready()" class="mt-2 text-xs text-slate-400">Preparing chat workspace…</p>
       </footer>

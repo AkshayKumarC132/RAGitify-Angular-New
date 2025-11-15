@@ -50,6 +50,9 @@ export class MainLayoutComponent {
     if (route.includes('library')) {
       return 'Document Library';
     }
+    if (route.includes('general-chat')) {
+      return 'General Chat';
+    }
     if (route.includes('projects')) {
       return 'Projects';
     }

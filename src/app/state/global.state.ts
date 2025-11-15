@@ -19,6 +19,7 @@ export class GlobalState {
   private readonly _runStatus = signal<RunStatus | null>(null);
   private readonly _activeRun = signal<Run | null>(null);
   private readonly _workspaceReady = signal(false);
+  private readonly _projectChatLocked = signal(false);
 
   readonly sessionToken = this._sessionToken.asReadonly();
   readonly currentUser = this._currentUser.asReadonly();
@@ -31,6 +32,7 @@ export class GlobalState {
   readonly runStatus = this._runStatus.asReadonly();
   readonly activeRun = this._activeRun.asReadonly();
   readonly workspaceReady = this._workspaceReady.asReadonly();
+  readonly projectChatLocked = this._projectChatLocked.asReadonly();
 
   readonly isAuthenticated = computed(() => this._sessionToken() !== null);
 
@@ -53,6 +55,7 @@ export class GlobalState {
     this._runStatus.set(null);
     this._activeRun.set(null);
     this._workspaceReady.set(false);
+    this._projectChatLocked.set(false);
   }
 
   updateVectorStore(store: VectorStore | null): void {
@@ -89,5 +92,9 @@ export class GlobalState {
 
   setWorkspaceReady(ready: boolean): void {
     this._workspaceReady.set(ready);
+  }
+
+  setProjectChatLocked(locked: boolean): void {
+    this._projectChatLocked.set(locked);
   }
 }

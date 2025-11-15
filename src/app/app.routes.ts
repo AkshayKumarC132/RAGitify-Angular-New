@@ -41,6 +41,17 @@ export const appRoutes: Routes = [
     ]
   },
   {
+    path: 'general-chat',
+    canActivate: [authGuard],
+    loadComponent: () => import('./layout/main-layout.component').then(m => m.MainLayoutComponent),
+    children: [
+      {
+        path: '',
+        loadComponent: () => import('./general-chat/general-chat.component').then(m => m.GeneralChatComponent)
+      }
+    ]
+  },
+  {
     path: 'projects',
     canActivate: [authGuard],
     loadComponent: () => import('./layout/main-layout.component').then(m => m.MainLayoutComponent),

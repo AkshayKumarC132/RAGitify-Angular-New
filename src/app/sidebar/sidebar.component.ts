@@ -71,6 +71,17 @@ import { ThreadItem } from '../models/thread.model';
                 <span *ngIf="!collapsed()">Document Library</span>
               </a>
             </li>
+            <li>
+              <a
+                routerLink="/general-chat"
+                routerLinkActive="bg-white/10"
+                class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-200 hover:bg-white/5"
+                [matTooltip]="collapsed() ? 'General chat' : ''"
+              >
+                <span class="material-icons text-lg">forum</span>
+                <span *ngIf="!collapsed()">General Chat</span>
+              </a>
+            </li>
           </ul>
         </div>
         <div>
