@@ -43,8 +43,9 @@ interface PendingUpload {
             <h2 class="text-lg font-semibold">Projects</h2>
             <p class="text-sm text-slate-400">Workspaces linking vector stores, assistants, and documents.</p>
           </div>
-          <button class="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground" (click)="openStepOne()">
-            New project
+          <button class="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground" (click)="openStepOne()">
+            <span class="material-icons text-base">add</span>
+            <span>New project</span>
           </button>
         </header>
         <div class="mt-6 grid gap-4 md:grid-cols-2">
@@ -126,11 +127,13 @@ interface PendingUpload {
           <footer class="flex justify-end gap-3 pt-2">
             <button type="button" class="rounded-lg border border-white/10 px-3 py-2 text-sm" (click)="closeWizard()">Cancel</button>
             <button
-              class="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-40"
+              class="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-40"
               type="submit"
-              [disabled]="stepOneForm.invalid"
+              [disabled]="stepOneForm.invalid || creatingStore()"
             >
-              Continue
+              <span class="material-icons text-base" *ngIf="creatingStore()">hourglass_top</span>
+              <span class="material-icons text-base" *ngIf="!creatingStore()">arrow_forward</span>
+              <span>{{ creatingStore() ? 'Preparing…' : 'Continue' }}</span>
             </button>
           </footer>
         </form>
@@ -144,7 +147,10 @@ interface PendingUpload {
             <h3 class="text-lg font-semibold">Link documents</h3>
             <p class="text-sm text-slate-400">Select existing documents or upload new ones. Pick at least one to continue.</p>
           </div>
-          <button class="rounded-lg border border-white/10 px-3 py-1 text-sm" (click)="backToStepOne()">Back</button>
+          <button class="flex items-center gap-1 rounded-lg border border-white/10 px-3 py-1 text-sm" (click)="backToStepOne()">
+            <span class="material-icons text-base">arrow_back</span>
+            <span>Back</span>
+          </button>
         </header>
         <div class="mt-4 grid gap-6 lg:grid-cols-[2fr_1fr]">
           <section>
@@ -256,11 +262,13 @@ export class ProjectsComponent {
   readonly selectedDocumentIds = signal<Set<string>>(new Set());
   readonly pendingUploads = signal<PendingUpload[]>([]);
   readonly creatingProject = signal(false);
+  readonly creatingStore = signal(false);
   readonly showStepOne = signal(false);
   readonly showStepTwo = signal(false);
   readonly models = ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'];
 
   private pendingConfig: PendingProjectConfig | null = null;
+  private pendingStore: VectorStore | null = null;
   private uploadFile: File | null = null;
 
   readonly stepOneForm = this.fb.group({
@@ -299,6 +307,7 @@ export class ProjectsComponent {
   openStepOne(): void {
     this.stepOneForm.reset({ name: '', instructions: '', model: 'gpt-4o-mini' });
     this.pendingConfig = null;
+    this.pendingStore = null;
     this.selectedDocumentIds.set(new Set());
     this.showStepOne.set(true);
     this.state.setProjectChatLocked(true);
@@ -309,10 +318,31 @@ export class ProjectsComponent {
       this.stepOneForm.markAllAsTouched();
       return;
     }
-    this.pendingConfig = this.stepOneForm.getRawValue() as PendingProjectConfig;
-    this.showStepOne.set(false);
-    this.showStepTwo.set(true);
-    this.state.setProjectChatLocked(true);
+    if (this.creatingStore()) {
+      return;
+    }
+    this.creatingStore.set(true);
+    const formValues = this.stepOneForm.getRawValue() as PendingProjectConfig;
+    this.vectorStoreService.create({ name: formValues.name }).subscribe({
+      next: store => {
+        this.pendingConfig = formValues;
+        this.pendingStore = store;
+        this.vectorStores.update(current =>
+          current.some(item => item.id === store.id) ? current : [store, ...current]
+        );
+        this.uploadForm.patchValue({ vector_store_id: store.id }, { emitEvent: false });
+        this.showStepOne.set(false);
+        this.showStepTwo.set(true);
+        this.state.setProjectChatLocked(true);
+        this.creatingStore.set(false);
+        this.loadDocuments();
+      },
+      error: error => {
+        console.error('Failed to create vector store for project', error);
+        this.notifications.push('error', 'Unable to prepare a vector store for this project.');
+        this.creatingStore.set(false);
+      }
+    });
   }
 
   backToStepOne(): void {
@@ -324,6 +354,7 @@ export class ProjectsComponent {
     this.showStepOne.set(false);
     this.showStepTwo.set(false);
     this.pendingConfig = null;
+    this.pendingStore = null;
     this.selectedDocumentIds.set(new Set());
     this.pendingUploads.set([]);
     this.uploadForm.reset({ vector_store_id: '', s3_file_url: '' });
@@ -414,8 +445,10 @@ export class ProjectsComponent {
     }
     this.creatingProject.set(true);
     const config = this.pendingConfig;
-    this.vectorStoreService
-      .create({ name: config.name })
+    const store$ = this.pendingStore
+      ? of(this.pendingStore)
+      : this.vectorStoreService.create({ name: config.name });
+    store$
       .pipe(
         switchMap(store =>
           this.assistantService.create({
@@ -441,6 +474,7 @@ export class ProjectsComponent {
           this.notifications.push('success', 'Project created successfully.');
           this.projects.update(items => [...items, project]);
           this.creatingProject.set(false);
+          this.pendingStore = null;
           this.closeWizard();
           this.loadVectorStores();
           this.setActive(project);

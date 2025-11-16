@@ -71,17 +71,6 @@ import { ThreadItem } from '../models/thread.model';
                 <span *ngIf="!collapsed()">Document Library</span>
               </a>
             </li>
-            <li>
-              <a
-                routerLink="/general-chat"
-                routerLinkActive="bg-white/10"
-                class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-200 hover:bg-white/5"
-                [matTooltip]="collapsed() ? 'General chat' : ''"
-              >
-                <span class="material-icons text-lg">forum</span>
-                <span *ngIf="!collapsed()">General Chat</span>
-              </a>
-            </li>
           </ul>
         </div>
         <div>
@@ -95,22 +84,24 @@ import { ThreadItem } from '../models/thread.model';
                   [matTooltip]="collapsed() ? (thread.title ?? 'Untitled thread') : ''"
                 >
                   <span class="material-icons text-lg">chat_bubble</span>
-                  <span *ngIf="!collapsed()" class="truncate">{{ thread.title ?? 'Untitled thread' }}</span>
+                  <span *ngIf="!collapsed()" class="truncate">{{ shortenTitle(thread.title ?? 'Untitled thread') }}</span>
                 </a>
                 <div class="flex items-center gap-1" *ngIf="!collapsed()">
                   <button
                     type="button"
-                    class="rounded border border-white/10 px-2 py-1 text-[11px] text-slate-200 hover:bg-white/5"
+                    class="flex h-8 w-8 items-center justify-center rounded border border-white/10 text-slate-200 hover:bg-white/5"
                     (click)="editThread(thread, $event)"
+                    aria-label="Rename thread"
                   >
-                    Edit
+                    <span class="material-icons text-sm">edit</span>
                   </button>
                   <button
                     type="button"
-                    class="rounded border border-red-500/40 px-2 py-1 text-[11px] text-red-300 hover:bg-red-500/10"
+                    class="flex h-8 w-8 items-center justify-center rounded border border-red-500/40 text-red-300 hover:bg-red-500/10"
                     (click)="deleteThread(thread, $event)"
+                    aria-label="Delete thread"
                   >
-                    Delete
+                    <span class="material-icons text-sm">delete</span>
                   </button>
                 </div>
               </div>
@@ -171,6 +162,10 @@ export class SidebarComponent {
         this.router.navigate(['/chat', thread.id]);
         this.newChat.emit();
       });
+  }
+
+  shortenTitle(title: string, max = 26): string {
+    return title.length > max ? `${title.slice(0, max - 1)}…` : title;
   }
 
   applyFilter(): void {

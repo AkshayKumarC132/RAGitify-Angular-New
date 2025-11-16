@@ -81,7 +81,13 @@ interface AttachUpload {
                 <p class="truncate font-medium">{{ doc.title }}</p>
                 <p class="text-xs text-slate-500">Status: {{ doc.status }}</p>
               </div>
-              <button class="rounded border border-red-500/40 px-2 py-1 text-[11px] text-red-300" (click)="unlink(doc)">Remove</button>
+              <button
+                class="flex h-8 w-8 items-center justify-center rounded border border-red-500/40 text-red-300 hover:bg-red-500/10"
+                (click)="unlink(doc)"
+                aria-label="Remove document"
+              >
+                <span class="material-icons text-sm">link_off</span>
+              </button>
             </li>
             <li *ngIf="linkedDocuments().length === 0" class="text-xs text-slate-500">No documents linked yet.</li>
           </ul>
@@ -125,7 +131,7 @@ interface AttachUpload {
                 'border-white/10': state.currentThread()?.id !== thread.id
               }"
             >
-              <span class="truncate">{{ thread.title ?? 'Untitled thread' }}</span>
+              <span class="truncate">{{ shortenTitle(thread.title ?? 'Untitled thread') }}</span>
               <div class="flex items-center gap-1">
                 <button
                   type="button"
@@ -305,6 +311,10 @@ export class ProjectPanelComponent {
       .get('s3_file_url')
       ?.valueChanges.pipe(takeUntilDestroyed())
       .subscribe(value => this.state.setProjectChatLocked(this.showAttach() || Boolean(value) || Boolean(this.attachFile)));
+  }
+
+  shortenTitle(title: string, max = 26): string {
+    return title.length > max ? `${title.slice(0, max - 1)}…` : title;
   }
 
   persistStoreName(): void {

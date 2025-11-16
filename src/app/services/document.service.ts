@@ -1,6 +1,6 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, map } from 'rxjs';
 import { DocumentIngestRequest, DocumentIngestResponse, DocumentItem, DocumentStatusResponse } from '../models/document.model';
 import { buildTokenUrl, buildTokenUrlWithId } from '../utils/api-url';
 import { BaseApiService } from './base-api.service';
@@ -15,7 +15,10 @@ export class DocumentService extends BaseApiService {
     if (vectorStoreId) {
       params = params.set('vector_store_id', vectorStoreId);
     }
-    return this.http.get<DocumentItem[]>(buildTokenUrl('document', token, 'list'), { params });
+    return this.http.get<DocumentItem[] | { results: DocumentItem[] }>(buildTokenUrl('document', token, 'list'), { params }).pipe(
+      // Some backends wrap list results; normalize so the UI always receives a flat array.
+      map(response => (Array.isArray(response) ? response : response?.results ?? []))
+    );
   }
 
   ingest(request: DocumentIngestRequest): Observable<DocumentIngestResponse> {

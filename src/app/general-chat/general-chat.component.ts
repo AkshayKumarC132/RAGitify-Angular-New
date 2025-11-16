@@ -24,9 +24,15 @@ import { DocumentService } from '../services/document.service';
   template: `
     <div class="flex h-full">
       <aside class="hidden w-72 flex-shrink-0 flex-col border-r border-white/10 bg-slate-950/70 p-4 md:flex">
-        <header class="flex items-center justify-between"> 
+        <header class="flex items-center justify-between">
           <h2 class="text-sm font-semibold text-slate-200">Threads</h2>
-          <button class="rounded-lg border border-white/10 px-2 py-1 text-xs" (click)="createNewChat()">New</button>
+          <button
+            class="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 text-slate-100 hover:bg-white/5"
+            (click)="createNewChat()"
+            aria-label="New thread"
+          >
+            <span class="material-icons text-base">add</span>
+          </button>
         </header>
         <input
           type="search"
@@ -46,23 +52,25 @@ import { DocumentService } from '../services/document.service';
             }"
             >
               <div class="min-w-0">
-                <p class="truncate font-medium">{{ thread.title ?? 'Untitled thread' }}</p>
+                <p class="truncate font-medium">{{ shortenTitle(thread.title ?? 'Untitled thread') }}</p>
                 <p class="text-xs text-slate-500">Updated {{ thread.created_at | date: 'short' }}</p>
               </div>
             <div class="flex items-center gap-1">
               <button
                 type="button"
-                class="rounded border border-white/10 px-2 py-1 text-[11px] text-slate-200 hover:bg-white/5"
+                class="flex h-8 w-8 items-center justify-center rounded border border-white/10 text-slate-200 hover:bg-white/5"
                 (click)="editThread(thread, $event)"
+                aria-label="Rename thread"
               >
-                Edit
+                <span class="material-icons text-sm">edit</span>
               </button>
               <button
                 type="button"
-                class="rounded border border-red-500/40 px-2 py-1 text-[11px] text-red-300 hover:bg-red-500/10"
+                class="flex h-8 w-8 items-center justify-center rounded border border-red-500/40 text-red-300 hover:bg-red-500/10"
                 (click)="deleteThread(thread, $event)"
+                aria-label="Delete thread"
               >
-                Delete
+                <span class="material-icons text-sm">delete</span>
               </button>
             </div>
           </li>
@@ -77,7 +85,13 @@ import { DocumentService } from '../services/document.service';
             <h1 class="text-lg font-semibold">{{ selectedThread()?.title ?? 'Select a thread' }}</h1>
             <p class="text-sm text-slate-400">Manage ad-hoc conversations independent of project chat.</p>
           </div>
-          <button class="rounded-lg border border-white/10 px-3 py-1 text-sm" (click)="createNewChat()">Create thread</button>
+          <button
+            class="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-slate-100 hover:bg-white/5"
+            (click)="createNewChat()"
+            aria-label="Create thread"
+          >
+            <span class="material-icons text-base">add</span>
+          </button>
         </header>
         <div class="flex-1 overflow-y-auto bg-slate-950/50 px-6 py-4">
           <div class="mx-auto flex max-w-3xl flex-col gap-4">
@@ -189,6 +203,10 @@ export class GeneralChatComponent implements OnDestroy {
 
   ngOnDestroy(): void {
     this.stopAssistantPolling();
+  }
+
+  shortenTitle(title: string, max = 26): string {
+    return title.length > max ? `${title.slice(0, max - 1)}…` : title;
   }
 
   createNewChat(): void {
