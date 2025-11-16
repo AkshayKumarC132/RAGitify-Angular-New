@@ -46,10 +46,17 @@ import { Run } from '../models/run.model';
           </select>
         </div>
       </header>
-      <ng-container *ngIf="ready(); else preparing">
+      <ng-container *ngIf="readyForHistory(); else preparing">
         <section class="flex-1 overflow-y-auto px-6 py-4 scrollbar-thin">
           <div class="mx-auto flex max-w-3xl flex-col gap-6">
             <app-message-bubble *ngFor="let message of state.messages()" [message]="message" />
+            <div
+              *ngIf="isWaitingForAssistant()"
+              class="flex items-center gap-2 text-sm text-slate-400"
+            >
+              <span class="h-2 w-2 animate-ping rounded-full bg-primary"></span>
+              <span>Generating response…</span>
+            </div>
           </div>
         </section>
       </ng-container>
@@ -60,7 +67,7 @@ import { Run } from '../models/run.model';
       </ng-template>
       <footer class="border-t border-white/5 px-6 py-4">
         <app-chat-bar
-          [disabled]="!ready() || state.uploading() || state.projectChatLocked() || isBusy()"
+          [disabled]="!canSend()"
           (send)="handleSend($event)"
         />
         <p *ngIf="state.uploading()" class="mt-2 text-xs text-amber-300">
@@ -69,7 +76,9 @@ import { Run } from '../models/run.model';
         <p *ngIf="state.projectChatLocked() && !state.uploading()" class="mt-2 text-xs text-amber-300">
           Document selection in progress — chat is temporarily unavailable
         </p>
-        <p *ngIf="!ready()" class="mt-2 text-xs text-slate-400">Preparing chat workspace…</p>
+        <p *ngIf="!canSend() && !state.uploading() && !state.projectChatLocked()" class="mt-2 text-xs text-slate-400">
+          Preparing chat workspace…
+        </p>
       </footer>
     </div>
   `,
@@ -87,10 +96,14 @@ export class ChatComponent {
   readonly mode = signal<Mode>('normal');
   readonly model = signal('gpt-4o-mini');
   readonly models = ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'];
-  readonly ready = computed(
+  readonly readyForHistory = computed(() => Boolean(this.state.currentThread()));
+  readonly canSend = computed(
     () =>
       this.state.workspaceReady() &&
-      Boolean(this.state.currentAssistant() && this.state.currentThread() && this.state.currentVectorStore())
+      Boolean(this.state.currentAssistant() && this.state.currentThread() && this.state.currentVectorStore()) &&
+      !this.state.uploading() &&
+      !this.state.projectChatLocked() &&
+      !this.isBusy()
   );
 
   constructor() {
@@ -115,6 +128,7 @@ export class ChatComponent {
       .subscribe(thread => {
         if (thread) {
           this.state.updateThread(thread);
+          this.loadMessages(thread.id);
         }
       });
   }
@@ -189,6 +203,11 @@ export class ChatComponent {
       .subscribe(messages => {
         this.state.setMessages(messages);
       });
+  }
+
+  isWaitingForAssistant(): boolean {
+    const status = this.state.runStatus();
+    return status === 'queued' || status === 'in_progress' || status === 'requires_action';
   }
 
   isBusy(): boolean {
