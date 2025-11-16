@@ -15,6 +15,7 @@ import { RunService } from '../services/run.service';
 import { NotificationService } from '../services/notification.service';
 import { ThreadItem } from '../models/thread.model';
 import { Run } from '../models/run.model';
+import { WorkspaceService } from '../services/workspace.service';
 
 @Component({
   selector: 'app-chat',
@@ -92,6 +93,7 @@ export class ChatComponent {
   private readonly runService = inject(RunService);
   private readonly notifications = inject(NotificationService);
   private readonly route = inject(ActivatedRoute);
+  private readonly workspace = inject(WorkspaceService);
 
   readonly mode = signal<Mode>('normal');
   readonly model = signal('gpt-4o-mini');
@@ -120,7 +122,7 @@ export class ChatComponent {
         switchMap(params => {
           const threadId = params.get('id');
           if (threadId) {
-            return this.threadService.retrieve(threadId);
+            return this.workspace.hydrateFromThread(threadId).pipe(switchMap(() => this.threadService.retrieve(threadId)));
           }
           return of<ThreadItem | null>(null);
         })
