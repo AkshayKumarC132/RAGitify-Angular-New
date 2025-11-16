@@ -33,10 +33,11 @@ interface AttachUpload {
             <p class="text-sm text-slate-400">Manage instructions, linked documents, and threads.</p>
           </div>
           <button
-            class="rounded-lg border border-red-500/40 px-3 py-1 text-xs text-red-200"
+            class="flex items-center justify-center rounded-lg border border-red-500/40 px-2 py-1 text-xs text-red-200"
             (click)="deleteCurrentProject()"
+            aria-label="Delete project"
           >
-            Delete
+            <span class="material-icons text-sm">delete</span>
           </button>
         </div>
       </header>
@@ -88,7 +89,31 @@ interface AttachUpload {
         <div>
           <div class="flex items-center justify-between">
             <h3 class="text-xs uppercase tracking-widest text-slate-500">Threads</h3>
-            <button class="rounded-lg border border-white/10 px-3 py-1 text-xs" (click)="createThread()">New thread</button>
+            <div class="flex items-center gap-2">
+              <button
+                class="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 text-slate-100 hover:bg-white/5"
+                (click)="createThread()"
+                aria-label="Create thread"
+              >
+                <span class="material-icons text-[18px]">add</span>
+              </button>
+              <button
+                class="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 text-slate-100 hover:bg-white/5 disabled:opacity-40"
+                (click)="editSelectedThread()"
+                [disabled]="!state.currentThread()"
+                aria-label="Edit selected thread"
+              >
+                <span class="material-icons text-[18px]">edit</span>
+              </button>
+              <button
+                class="flex h-8 w-8 items-center justify-center rounded-lg border border-red-500/40 text-red-200 hover:bg-red-500/10 disabled:opacity-40"
+                (click)="deleteSelectedThread()"
+                [disabled]="!state.currentThread()"
+                aria-label="Delete selected thread"
+              >
+                <span class="material-icons text-[18px]">delete</span>
+              </button>
+            </div>
           </div>
           <ul class="mt-2 space-y-2 text-sm text-slate-300">
             <li
@@ -104,17 +129,19 @@ interface AttachUpload {
               <div class="flex items-center gap-1">
                 <button
                   type="button"
-                  class="rounded border border-white/10 px-2 py-1 text-[11px] text-slate-200 hover:bg-white/5"
+                  class="flex h-8 w-8 items-center justify-center rounded border border-white/10 text-slate-200 hover:bg-white/5"
                   (click)="editThread(thread, $event)"
+                  aria-label="Edit thread"
                 >
-                  Edit
+                  <span class="material-icons text-[18px]">edit</span>
                 </button>
                 <button
                   type="button"
-                  class="rounded border border-red-500/40 px-2 py-1 text-[11px] text-red-300 hover:bg-red-500/10"
+                  class="flex h-8 w-8 items-center justify-center rounded border border-red-500/40 text-red-300 hover:bg-red-500/10"
                   (click)="deleteThread(thread, $event)"
+                  aria-label="Delete thread"
                 >
-                  Delete
+                  <span class="material-icons text-[18px]">delete</span>
                 </button>
               </div>
             </li>
@@ -225,7 +252,7 @@ interface AttachUpload {
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class ProjectPanelComponent {
-  private readonly state = inject(GlobalState);
+  readonly state = inject(GlobalState);
   private readonly assistantService = inject(AssistantService);
   private readonly documentService = inject(DocumentService);
   private readonly documentAccessService = inject(DocumentAccessService);
@@ -373,8 +400,8 @@ export class ProjectPanelComponent {
     });
   }
 
-  editThread(thread: ThreadItem, event: Event): void {
-    event.stopPropagation();
+  editThread(thread: ThreadItem, event?: Event): void {
+    event?.stopPropagation();
     const proposed = window.prompt('Rename thread', thread.title ?? '');
     if (proposed === null) {
       return;
@@ -399,8 +426,8 @@ export class ProjectPanelComponent {
     });
   }
 
-  deleteThread(thread: ThreadItem, event: Event): void {
-    event.stopPropagation();
+  deleteThread(thread: ThreadItem, event?: Event): void {
+    event?.stopPropagation();
     if (!window.confirm('Delete this thread? This action cannot be undone.')) {
       return;
     }
@@ -423,6 +450,20 @@ export class ProjectPanelComponent {
     this.state.updateThread(thread);
   }
 
+  editSelectedThread(): void {
+    const current = this.state.currentThread();
+    if (current) {
+      this.editThread(current);
+    }
+  }
+
+  deleteSelectedThread(): void {
+    const current = this.state.currentThread();
+    if (current) {
+      this.deleteThread(current);
+    }
+  }
+
   deleteCurrentProject(): void {
     const store = this.state.currentVectorStore();
     const assistant = this.state.currentAssistant();
@@ -443,6 +484,7 @@ export class ProjectPanelComponent {
         this.state.updateAssistant(null);
         this.state.updateThread(null);
         this.state.setMessages([]);
+        this.state.setProjectPanelOpen(false);
         this.threads.set([]);
         this.linkedDocuments.set([]);
         this.projectForm.reset({ name: '', instructions: '' });

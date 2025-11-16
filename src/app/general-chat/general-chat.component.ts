@@ -160,6 +160,8 @@ export class GeneralChatComponent implements OnDestroy {
   });
 
   constructor() {
+    this.state.setProjectPanelOpen(false);
+
     effect(() => {
       if (!this.state.sessionToken()) {
         this.threads.set([]);

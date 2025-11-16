@@ -154,6 +154,8 @@ export class LibraryComponent {
   });
 
   constructor() {
+    this.state.setProjectPanelOpen(false);
+
     effect(() => {
       if (!this.state.workspaceReady()) {
         this.documents.set([]);

@@ -1,4 +1,4 @@
-import { AsyncPipe, NgIf } from '@angular/common';
+import { AsyncPipe, NgClass, NgIf } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, effect, inject } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { SidebarComponent } from '../sidebar/sidebar.component';
@@ -15,10 +15,13 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 @Component({
   selector: 'app-main-layout',
   standalone: true,
-  imports: [RouterOutlet, SidebarComponent, ProjectPanelComponent, ToastContainerComponent, NgIf, AsyncPipe],
+  imports: [RouterOutlet, SidebarComponent, ProjectPanelComponent, ToastContainerComponent, NgIf, AsyncPipe, NgClass],
   template: `
     <app-toast-container />
-    <div class="grid min-h-screen grid-cols-[auto_1fr_auto] bg-surface text-slate-100">
+    <div
+      class="grid min-h-screen bg-surface text-slate-100"
+      [ngClass]="state.projectPanelOpen() ? 'grid-cols-[auto_1fr_auto]' : 'grid-cols-[auto_1fr]'"
+    >
       <app-sidebar class="border-r border-white/5" />
       <main class="relative flex flex-col">
         <header class="flex items-center justify-between border-b border-white/5 px-6 py-4">
@@ -34,13 +37,13 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
           <router-outlet />
         </section>
       </main>
-      <app-project-panel class="border-l border-white/5" />
+      <app-project-panel *ngIf="state.projectPanelOpen()" class="border-l border-white/5" />
     </div>
   `,
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class MainLayoutComponent {
-  private readonly state = inject(GlobalState);
+  readonly state = inject(GlobalState);
   private readonly auth = inject(AuthService);
   private readonly workspace = inject(WorkspaceService);
   private readonly notifications = inject(NotificationService);

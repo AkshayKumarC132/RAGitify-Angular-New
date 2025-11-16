@@ -55,11 +55,19 @@ interface PendingUpload {
                 <p class="text-xs text-slate-400">Assistant: {{ project.assistant.name }} · Model: {{ project.assistant.model }}</p>
               </div>
               <div class="flex items-center gap-2">
-                <button class="shrink-0 rounded-lg border border-white/10 px-3 py-1 text-xs" (click)="editProject(project)">
-                  Edit
+                <button
+                  class="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-slate-100 hover:bg-white/5"
+                  (click)="editProject(project)"
+                  aria-label="Edit project"
+                >
+                  <span class="material-icons text-base">edit</span>
                 </button>
-                <button class="shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs text-red-200" (click)="deleteProject(project)">
-                  Delete
+                <button
+                  class="flex h-9 w-9 items-center justify-center rounded-lg border border-red-500/40 text-red-200 hover:bg-red-500/10"
+                  (click)="deleteProject(project)"
+                  aria-label="Delete project"
+                >
+                  <span class="material-icons text-base">delete</span>
                 </button>
                 <button class="shrink-0 rounded-lg border border-white/10 px-3 py-1 text-xs" (click)="setActive(project)">
                   Open
@@ -267,6 +275,8 @@ export class ProjectsComponent {
   });
 
   constructor() {
+    this.state.setProjectPanelOpen(false);
+
     effect(() => {
       if (!this.state.workspaceReady()) {
         this.projects.set([]);
@@ -450,6 +460,7 @@ export class ProjectsComponent {
     this.state.updateAssistant(project.assistant);
     this.state.updateThread(null);
     this.state.setMessages([]);
+    this.state.setProjectPanelOpen(true);
     this.loadThreadsForStore(project.store.id);
   }
 
@@ -503,6 +514,7 @@ export class ProjectsComponent {
           this.state.updateAssistant(null);
           this.state.updateThread(null);
           this.state.setMessages([]);
+          this.state.setProjectPanelOpen(false);
         }
       },
       error: error => {
@@ -518,24 +530,27 @@ export class ProjectsComponent {
   }
 
   private bootstrapProjects(): void {
-    combineLatest([this.vectorStoreService.list(), this.assistantService.list()])
+    combineLatest([this.vectorStoreService.list(), this.assistantService.list(), this.documentService.list()])
       .pipe(takeUntilDestroyed())
       .subscribe({
-      next: ([stores, assistants]) => {
+      next: ([stores, assistants, documents]) => {
+        const storesWithDocs = new Set(documents.map(doc => doc.vector_store).filter((id): id is string => Boolean(id)));
         const mapped: ProjectView[] = stores
+          .filter(store => storesWithDocs.has(store.id))
           .map(store => {
             const assistant = assistants.find(item => this.resolveAssistantStoreId(item) === store.id);
             return assistant ? { store, assistant } : null;
           })
           .filter((value): value is ProjectView => value !== null);
-        if (mapped.length) {
-          this.projects.set(mapped);
-          const active = this.state.currentVectorStore();
-          if (!active && mapped.length) {
-            this.setActive(mapped[0]);
+        this.projects.set(mapped);
+
+        const activeId = this.state.currentVectorStore()?.id;
+        if (activeId) {
+          const activeProject = mapped.find(project => project.store.id === activeId);
+          if (activeProject) {
+            this.state.updateVectorStore(activeProject.store);
+            this.state.updateAssistant(activeProject.assistant);
           }
-        } else {
-          this.projects.set([]);
         }
       },
       error: error => {
