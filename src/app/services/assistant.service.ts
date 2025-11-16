@@ -13,8 +13,11 @@ export class AssistantService extends BaseApiService {
   list(): Observable<Assistant[]> {
     const token = this.requireToken();
     return this.http
-      .get<Assistant[]>(buildTokenUrl('assistant', token, 'list'))
-      .pipe(map(items => items.map(item => this.normalizeAssistant(item))));
+      .get<Assistant[] | { results: Assistant[] }>(buildTokenUrl('assistant', token, 'list'))
+      .pipe(
+        map(response => (Array.isArray(response) ? response : response?.results ?? [])),
+        map(items => items.map(item => this.normalizeAssistant(item)))
+      );
   }
 
   create(payload: AssistantCreateRequest): Observable<Assistant> {
