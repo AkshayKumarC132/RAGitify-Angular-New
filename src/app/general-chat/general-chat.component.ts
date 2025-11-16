@@ -44,12 +44,27 @@ import { DocumentService } from '../services/document.service';
               'border-primary bg-white/10': selectedThread()?.id === thread.id,
               'border-white/10': selectedThread()?.id !== thread.id
             }"
-          >
-            <div class="min-w-0">
-              <p class="truncate font-medium">{{ thread.title ?? 'Untitled thread' }}</p>
-              <p class="text-xs text-slate-500">Updated {{ thread.created_at | date: 'short' }}</p>
+            >
+              <div class="min-w-0">
+                <p class="truncate font-medium">{{ thread.title ?? 'Untitled thread' }}</p>
+                <p class="text-xs text-slate-500">Updated {{ thread.created_at | date: 'short' }}</p>
+              </div>
+            <div class="flex items-center gap-1">
+              <button
+                type="button"
+                class="rounded border border-white/10 px-2 py-1 text-[11px] text-slate-200 hover:bg-white/5"
+                (click)="editThread(thread, $event)"
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                class="rounded border border-red-500/40 px-2 py-1 text-[11px] text-red-300 hover:bg-red-500/10"
+                (click)="deleteThread(thread, $event)"
+              >
+                Delete
+              </button>
             </div>
-            <span class="material-icons text-base text-slate-400">chevron_right</span>
           </li>
           <li *ngIf="filteredThreads().length === 0" class="rounded-lg border border-dashed border-white/10 p-4 text-center text-xs text-slate-500">
             No threads yet.
@@ -264,6 +279,55 @@ export class GeneralChatComponent implements OnDestroy {
       error: error => {
         console.error('Failed to load threads', error);
         this.notifications.push('error', 'Unable to load threads.');
+      }
+    });
+  }
+
+  editThread(thread: ThreadItem, event: Event): void {
+    event.stopPropagation();
+    const proposed = window.prompt('Rename chat thread', thread.title ?? '');
+    if (proposed === null) {
+      return;
+    }
+    const name = proposed.trim();
+    if (!name) {
+      this.notifications.push('error', 'Thread name cannot be empty.');
+      return;
+    }
+    this.threadService.update(thread.id, { title: name }).subscribe({
+      next: updated => {
+        this.notifications.push('success', 'Thread renamed.');
+        this.threads.update(list => list.map(item => (item.id === thread.id ? updated : item)));
+        this.filterThreads();
+        if (this.selectedThread()?.id === thread.id) {
+          this.selectedThread.set(updated);
+        }
+      },
+      error: error => {
+        console.error('Failed to rename thread', error);
+        this.notifications.push('error', 'Unable to rename chat thread.');
+      }
+    });
+  }
+
+  deleteThread(thread: ThreadItem, event: Event): void {
+    event.stopPropagation();
+    const confirmed = window.confirm('Delete this chat thread? This cannot be undone.');
+    if (!confirmed) {
+      return;
+    }
+    this.threadService.delete(thread.id).subscribe({
+      next: () => {
+        this.notifications.push('success', 'Thread deleted.');
+        this.threads.update(list => list.filter(item => item.id !== thread.id));
+        this.filterThreads();
+        if (this.selectedThread()?.id === thread.id) {
+          this.selectedThread.set(this.threads()[0] ?? null);
+        }
+      },
+      error: error => {
+        console.error('Failed to delete thread', error);
+        this.notifications.push('error', 'Unable to delete chat thread.');
       }
     });
   }

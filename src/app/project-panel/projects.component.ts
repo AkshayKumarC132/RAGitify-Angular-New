@@ -1,7 +1,7 @@
 import { AsyncPipe, NgFor, NgIf } from '@angular/common';
 import { ChangeDetectionStrategy, Component, effect, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { combineLatest, interval, of, startWith, switchMap, takeWhile } from 'rxjs';
+import { combineLatest, forkJoin, interval, of, startWith, switchMap, takeWhile } from 'rxjs';
 import { VectorStoreService } from '../services/vectorstore.service';
 import { AssistantService } from '../services/assistant.service';
 import { DocumentService } from '../services/document.service';
@@ -54,9 +54,17 @@ interface PendingUpload {
                 <h3 class="truncate text-base font-semibold">{{ project.store.name }}</h3>
                 <p class="text-xs text-slate-400">Assistant: {{ project.assistant.name }} · Model: {{ project.assistant.model }}</p>
               </div>
-              <button class="shrink-0 rounded-lg border border-white/10 px-3 py-1 text-xs" (click)="setActive(project)">
-                Open
-              </button>
+              <div class="flex items-center gap-2">
+                <button class="shrink-0 rounded-lg border border-white/10 px-3 py-1 text-xs" (click)="editProject(project)">
+                  Edit
+                </button>
+                <button class="shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs text-red-200" (click)="deleteProject(project)">
+                  Delete
+                </button>
+                <button class="shrink-0 rounded-lg border border-white/10 px-3 py-1 text-xs" (click)="setActive(project)">
+                  Open
+                </button>
+              </div>
             </header>
             <section class="mt-4 text-sm text-slate-300">
               <h4 class="text-xs uppercase tracking-widest text-slate-500">Instructions</h4>
@@ -443,6 +451,65 @@ export class ProjectsComponent {
     this.state.updateThread(null);
     this.state.setMessages([]);
     this.loadThreadsForStore(project.store.id);
+  }
+
+  editProject(project: ProjectView): void {
+    const nameInput = window.prompt('Edit project name', project.store.name);
+    if (nameInput === null) {
+      return;
+    }
+    const instructionsInput = window.prompt('Edit assistant instructions', project.assistant.instructions ?? '');
+    if (instructionsInput === null) {
+      return;
+    }
+    const name = nameInput.trim();
+    const instructions = instructionsInput.trim();
+    if (!name || !instructions) {
+      this.notifications.push('error', 'Project name and instructions are required.');
+      return;
+    }
+    forkJoin({
+      store: this.vectorStoreService.update(project.store.id, { name }),
+      assistant: this.assistantService.update(project.assistant.id, { name: project.assistant.name, instructions })
+    }).subscribe({
+      next: ({ store, assistant }) => {
+        const updated = { store, assistant };
+        this.projects.update(items => items.map(item => (item.store.id === project.store.id ? updated : item)));
+        this.notifications.push('success', 'Project updated.');
+        if (this.state.currentVectorStore()?.id === project.store.id) {
+          this.setActive(updated);
+        }
+      },
+      error: error => {
+        console.error('Failed to update project', error);
+        this.notifications.push('error', 'Unable to update the project.');
+      }
+    });
+  }
+
+  deleteProject(project: ProjectView): void {
+    if (!window.confirm('Delete this project and its resources?')) {
+      return;
+    }
+    forkJoin([
+      this.assistantService.delete(project.assistant.id),
+      this.vectorStoreService.delete(project.store.id)
+    ]).subscribe({
+      next: () => {
+        this.notifications.push('success', 'Project deleted.');
+        this.projects.update(items => items.filter(item => item.store.id !== project.store.id));
+        if (this.state.currentVectorStore()?.id === project.store.id) {
+          this.state.updateVectorStore(null);
+          this.state.updateAssistant(null);
+          this.state.updateThread(null);
+          this.state.setMessages([]);
+        }
+      },
+      error: error => {
+        console.error('Failed to delete project', error);
+        this.notifications.push('error', 'Unable to delete the project.');
+      }
+    });
   }
 
   resolveStoreName(id: string): string {

@@ -11,7 +11,7 @@ import { VectorStoreService } from '../services/vectorstore.service';
 import { ThreadService } from '../services/thread.service';
 import { VectorStore } from '../models/vector-store.model';
 import { ThreadItem } from '../models/thread.model';
-import { combineLatest, interval, of, startWith, switchMap, takeWhile } from 'rxjs';
+import { combineLatest, forkJoin, interval, of, startWith, switchMap, takeWhile } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 interface AttachUpload {
@@ -27,8 +27,18 @@ interface AttachUpload {
   template: `
     <aside class="flex h-screen w-[340px] flex-col border-l border-white/10 bg-slate-950/70 p-6">
       <header class="space-y-1">
-        <h2 class="text-base font-semibold">Project</h2>
-        <p class="text-sm text-slate-400">Manage instructions, linked documents, and threads.</p>
+        <div class="flex items-center justify-between gap-2">
+          <div>
+            <h2 class="text-base font-semibold">Project</h2>
+            <p class="text-sm text-slate-400">Manage instructions, linked documents, and threads.</p>
+          </div>
+          <button
+            class="rounded-lg border border-red-500/40 px-3 py-1 text-xs text-red-200"
+            (click)="deleteCurrentProject()"
+          >
+            Delete
+          </button>
+        </div>
       </header>
       <section class="mt-4 space-y-4">
         <ng-container *ngIf="currentStore() as store">
@@ -91,7 +101,22 @@ interface AttachUpload {
               }"
             >
               <span class="truncate">{{ thread.title ?? 'Untitled thread' }}</span>
-              <span class="material-icons text-base text-slate-400">chevron_right</span>
+              <div class="flex items-center gap-1">
+                <button
+                  type="button"
+                  class="rounded border border-white/10 px-2 py-1 text-[11px] text-slate-200 hover:bg-white/5"
+                  (click)="editThread(thread, $event)"
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  class="rounded border border-red-500/40 px-2 py-1 text-[11px] text-red-300 hover:bg-red-500/10"
+                  (click)="deleteThread(thread, $event)"
+                >
+                  Delete
+                </button>
+              </div>
             </li>
             <li *ngIf="threads().length === 0" class="text-xs text-slate-500">No threads yet.</li>
           </ul>
@@ -348,8 +373,85 @@ export class ProjectPanelComponent {
     });
   }
 
+  editThread(thread: ThreadItem, event: Event): void {
+    event.stopPropagation();
+    const proposed = window.prompt('Rename thread', thread.title ?? '');
+    if (proposed === null) {
+      return;
+    }
+    const title = proposed.trim();
+    if (!title) {
+      this.notifications.push('error', 'Thread name cannot be empty.');
+      return;
+    }
+    this.threadService.update(thread.id, { title }).subscribe({
+      next: updated => {
+        this.notifications.push('success', 'Thread renamed.');
+        this.threads.update(list => list.map(item => (item.id === thread.id ? updated : item)));
+        if (this.state.currentThread()?.id === thread.id) {
+          this.state.updateThread(updated);
+        }
+      },
+      error: error => {
+        console.error('Failed to rename thread', error);
+        this.notifications.push('error', 'Unable to rename thread.');
+      }
+    });
+  }
+
+  deleteThread(thread: ThreadItem, event: Event): void {
+    event.stopPropagation();
+    if (!window.confirm('Delete this thread? This action cannot be undone.')) {
+      return;
+    }
+    this.threadService.delete(thread.id).subscribe({
+      next: () => {
+        this.notifications.push('success', 'Thread deleted.');
+        this.threads.update(list => list.filter(item => item.id !== thread.id));
+        if (this.state.currentThread()?.id === thread.id) {
+          this.state.updateThread(this.threads()[0] ?? null);
+        }
+      },
+      error: error => {
+        console.error('Failed to delete thread', error);
+        this.notifications.push('error', 'Unable to delete thread.');
+      }
+    });
+  }
+
   selectThread(thread: ThreadItem): void {
     this.state.updateThread(thread);
+  }
+
+  deleteCurrentProject(): void {
+    const store = this.state.currentVectorStore();
+    const assistant = this.state.currentAssistant();
+    if (!store || !assistant) {
+      this.notifications.push('error', 'No active project selected.');
+      return;
+    }
+    if (!window.confirm('Delete this project and all its threads?')) {
+      return;
+    }
+    forkJoin([
+      this.assistantService.delete(assistant.id),
+      this.vectorStoreService.delete(store.id)
+    ]).subscribe({
+      next: () => {
+        this.notifications.push('success', 'Project removed.');
+        this.state.updateVectorStore(null);
+        this.state.updateAssistant(null);
+        this.state.updateThread(null);
+        this.state.setMessages([]);
+        this.threads.set([]);
+        this.linkedDocuments.set([]);
+        this.projectForm.reset({ name: '', instructions: '' });
+      },
+      error: error => {
+        console.error('Failed to delete project', error);
+        this.notifications.push('error', 'Unable to delete the project.');
+      }
+    });
   }
 
   openAttach(): void {

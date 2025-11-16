@@ -88,14 +88,32 @@ import { ThreadItem } from '../models/thread.model';
           <h2 class="px-2 text-xs uppercase tracking-widest text-slate-500" *ngIf="!collapsed()">Recent Threads</h2>
           <ul class="space-y-1">
             <li *ngFor="let thread of filteredThreads()">
-              <a
-                [routerLink]="['/chat', thread.id]"
-                class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-300 hover:bg-white/5"
-                [matTooltip]="collapsed() ? (thread.title ?? 'Untitled thread') : ''"
-              >
-                <span class="material-icons text-lg">chat_bubble</span>
-                <span *ngIf="!collapsed()" class="truncate">{{ thread.title ?? 'Untitled thread' }}</span>
-              </a>
+              <div class="flex items-center justify-between rounded-lg px-3 py-2 hover:bg-white/5">
+                <a
+                  [routerLink]="['/chat', thread.id]"
+                  class="flex flex-1 items-center gap-3 text-sm text-slate-300"
+                  [matTooltip]="collapsed() ? (thread.title ?? 'Untitled thread') : ''"
+                >
+                  <span class="material-icons text-lg">chat_bubble</span>
+                  <span *ngIf="!collapsed()" class="truncate">{{ thread.title ?? 'Untitled thread' }}</span>
+                </a>
+                <div class="flex items-center gap-1" *ngIf="!collapsed()">
+                  <button
+                    type="button"
+                    class="rounded border border-white/10 px-2 py-1 text-[11px] text-slate-200 hover:bg-white/5"
+                    (click)="editThread(thread, $event)"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    class="rounded border border-red-500/40 px-2 py-1 text-[11px] text-red-300 hover:bg-red-500/10"
+                    (click)="deleteThread(thread, $event)"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
             </li>
           </ul>
         </div>
@@ -161,5 +179,32 @@ export class SidebarComponent {
       .filter(thread => (thread.title ?? 'Untitled thread').toLowerCase().includes(q))
       .slice(0, 20);
     this.filteredThreads.set(filtered);
+  }
+
+  editThread(thread: ThreadItem, event: Event): void {
+    event.stopPropagation();
+    const proposed = window.prompt('Rename chat', thread.title ?? '');
+    if (proposed === null) {
+      return;
+    }
+    const title = proposed.trim();
+    if (!title) {
+      return;
+    }
+    this.threadService.update(thread.id, { title }).subscribe(updated => {
+      this.threadsSignal.update(list => list.map(item => (item.id === thread.id ? updated : item)));
+      this.applyFilter();
+    });
+  }
+
+  deleteThread(thread: ThreadItem, event: Event): void {
+    event.stopPropagation();
+    if (!window.confirm('Delete this chat thread?')) {
+      return;
+    }
+    this.threadService.delete(thread.id).subscribe(() => {
+      this.threadsSignal.update(list => list.filter(item => item.id !== thread.id));
+      this.applyFilter();
+    });
   }
 }
