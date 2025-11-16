@@ -9,8 +9,13 @@ import { VectorStoreService } from '../services/vectorstore.service';
 import { NotificationService } from '../services/notification.service';
 import { ThreadItem } from '../models/thread.model';
 import { MessageItem } from '../models/message.model';
-import { Subscription, switchMap, timer } from 'rxjs';
+import { Subscription, forkJoin, of, switchMap, timer } from 'rxjs';
+import { catchError, map, tap } from 'rxjs/operators';
 import { VectorStore } from '../models/vector-store.model';
+import { AssistantService } from '../services/assistant.service';
+import { Run } from '../models/run.model';
+import { RunService } from '../services/run.service';
+import { DocumentService } from '../services/document.service';
 
 @Component({
   selector: 'app-general-chat',
@@ -19,9 +24,9 @@ import { VectorStore } from '../models/vector-store.model';
   template: `
     <div class="flex h-full">
       <aside class="hidden w-72 flex-shrink-0 flex-col border-r border-white/10 bg-slate-950/70 p-4 md:flex">
-        <header class="flex items-center justify-between">
+        <header class="flex items-center justify-between"> 
           <h2 class="text-sm font-semibold text-slate-200">Threads</h2>
-          <button class="rounded-lg border border-white/10 px-2 py-1 text-xs" (click)="openThreadModal()">New</button>
+          <button class="rounded-lg border border-white/10 px-2 py-1 text-xs" (click)="createNewChat()">New</button>
         </header>
         <input
           type="search"
@@ -57,7 +62,7 @@ import { VectorStore } from '../models/vector-store.model';
             <h1 class="text-lg font-semibold">{{ selectedThread()?.title ?? 'Select a thread' }}</h1>
             <p class="text-sm text-slate-400">Manage ad-hoc conversations independent of project chat.</p>
           </div>
-          <button class="rounded-lg border border-white/10 px-3 py-1 text-sm" (click)="openThreadModal()">Create thread</button>
+          <button class="rounded-lg border border-white/10 px-3 py-1 text-sm" (click)="createNewChat()">Create thread</button>
         </header>
         <div class="flex-1 overflow-y-auto bg-slate-950/50 px-6 py-4">
           <div class="mx-auto flex max-w-3xl flex-col gap-4">
@@ -69,6 +74,19 @@ import { VectorStore } from '../models/vector-store.model';
               <p class="mt-2 whitespace-pre-wrap text-sm text-slate-200">{{ message.content }}</p>
             </article>
             <p *ngIf="messages().length === 0" class="py-10 text-center text-sm text-slate-400">No messages yet.</p>
+            <div *ngIf="activeRuns().length" class="space-y-2 rounded-xl border border-primary/40 bg-primary/5 px-4 py-3 text-sm text-slate-200">
+              <div class="flex items-center justify-between text-xs uppercase tracking-widest text-primary">
+                <span>Run Progress</span>
+                <span>{{ activeRuns().length }} active</span>
+              </div>
+              <div *ngFor="let run of activeRuns()" class="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2">
+                <div class="flex items-center justify-between text-xs text-slate-400">
+                  <span>{{ run.mode }} mode</span>
+                  <span>{{ run.status }}</span>
+                </div>
+                <p class="mt-1 text-[13px] text-slate-300">Run ID: {{ run.id }}</p>
+              </div>
+            </div>
             <p *ngIf="assistantPending()" class="py-4 text-center text-xs uppercase tracking-widest text-slate-400 animate-pulse">
               Waiting for assistant response…
             </p>
@@ -94,31 +112,6 @@ import { VectorStore } from '../models/vector-store.model';
       </section>
     </div>
 
-    <section *ngIf="showThreadModal()" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur">
-      <div class="w-full max-w-md rounded-2xl border border-white/10 bg-slate-950/95 p-6 shadow-2xl">
-        <h3 class="text-lg font-semibold">Create thread</h3>
-        <p class="mt-1 text-sm text-slate-400">Choose a vector store for the new thread.</p>
-        <form [formGroup]="threadForm" (ngSubmit)="createThread()" class="mt-4 space-y-4">
-          <div>
-            <label class="text-xs uppercase tracking-widest text-slate-500">Vector store</label>
-            <select formControlName="vector_store_id" class="mt-1 w-full rounded-lg border border-white/10 bg-slate-900/70 px-3 py-2 text-sm">
-              <option value="" disabled>Select a vector store</option>
-              <option *ngFor="let store of vectorStores()" [value]="store.id">{{ store.name }}</option>
-            </select>
-          </div>
-          <footer class="flex justify-end gap-3">
-            <button type="button" class="rounded-lg border border-white/10 px-3 py-2 text-sm" (click)="closeThreadModal()">Cancel</button>
-            <button
-              class="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
-              type="submit"
-              [disabled]="threadForm.invalid"
-            >
-              Create
-            </button>
-          </footer>
-        </form>
-      </div>
-    </section>
   `,
   changeDetection: ChangeDetectionStrategy.OnPush
 })
@@ -127,6 +120,9 @@ export class GeneralChatComponent implements OnDestroy {
   private readonly threadService = inject(ThreadService);
   private readonly messageService = inject(MessageService);
   private readonly vectorStoreService = inject(VectorStoreService);
+  private readonly assistantService = inject(AssistantService);
+  private readonly runService = inject(RunService);
+  private readonly documentService = inject(DocumentService);
   private readonly notifications = inject(NotificationService);
   private readonly fb = inject(FormBuilder);
 
@@ -135,17 +131,14 @@ export class GeneralChatComponent implements OnDestroy {
   readonly selectedThread = signal<ThreadItem | null>(null);
   readonly messages = signal<MessageItem[]>([]);
   readonly vectorStores = signal<VectorStore[]>([]);
-  readonly showThreadModal = signal(false);
+  readonly runs = signal<Run[]>([]);
   readonly assistantPending = signal(false);
 
   private assistantPolling: Subscription | null = null;
   private lastKnownAssistantIds = new Set<number>();
+  private generalStoreIds = new Set<string>();
 
   threadQuery = '';
-
-  readonly threadForm = this.fb.group({
-    vector_store_id: ['', Validators.required]
-  });
 
   readonly messageForm = this.fb.group({
     content: ['', [Validators.required, Validators.minLength(1)]]
@@ -157,10 +150,10 @@ export class GeneralChatComponent implements OnDestroy {
         this.threads.set([]);
         this.filteredThreads.set([]);
         this.messages.set([]);
+        this.runs.set([]);
         this.stopAssistantPolling();
         return;
       }
-      this.loadThreads();
       this.loadVectorStores();
     });
 
@@ -169,8 +162,10 @@ export class GeneralChatComponent implements OnDestroy {
       this.stopAssistantPolling();
       if (thread) {
         this.loadMessages(thread.id);
+        this.loadRuns(thread.id);
       } else {
         this.messages.set([]);
+        this.runs.set([]);
       }
     });
   }
@@ -179,39 +174,39 @@ export class GeneralChatComponent implements OnDestroy {
     this.stopAssistantPolling();
   }
 
-  openThreadModal(): void {
-    const defaultStore = this.vectorStores()[0]?.id ?? '';
-    this.threadForm.reset({ vector_store_id: defaultStore });
-    this.showThreadModal.set(true);
-  }
-
-  closeThreadModal(): void {
-    this.showThreadModal.set(false);
-  }
-
-  createThread(): void {
-    if (this.threadForm.invalid) {
-      this.threadForm.markAllAsTouched();
-      return;
-    }
-    const payload = this.threadForm.getRawValue();
-    this.threadService
-      .create({
-        vector_store_id: payload.vector_store_id!
-      })
-      .subscribe({
-        next: thread => {
-          this.notifications.push('success', 'Thread created.');
+  createNewChat(): void {
+    this.notifications.push('info', 'Preparing a new chat workspace…');
+    const timestamp = new Date().toISOString();
+    const storeName = `General Chat ${timestamp}`;
+    this.vectorStoreService
+      .create({ name: storeName })
+      .pipe(
+        switchMap(store => {
+          this.generalStoreIds.add(store.id);
+          this.vectorStores.update(list => [store, ...list]);
+          return this.assistantService.create({
+            name: 'General Chat Assistant',
+            instructions: 'You are a helpful assistant for general conversations.',
+            model: 'gpt-4o-mini',
+            vector_store_id: store.id
+          }).pipe(map(assistant => ({ store, assistant })));
+        }),
+        switchMap(({ store, assistant }) =>
+          this.threadService.create({ vector_store_id: store.id }).pipe(map(thread => ({ store, assistant, thread })))
+        ),
+        tap(({ thread }) => {
+          this.notifications.push('success', 'New chat is ready.');
           this.threads.update(list => [thread, ...list]);
           this.filterThreads();
           this.selectThread(thread);
-          this.closeThreadModal();
-        },
-        error: error => {
-          console.error('Failed to create thread', error);
-          this.notifications.push('error', 'Unable to create the thread.');
-        }
-      });
+        }),
+        catchError(error => {
+          console.error('Failed to start general chat', error);
+          this.notifications.push('error', 'Unable to create a new chat.');
+          return of(null);
+        })
+      )
+      .subscribe();
   }
 
   selectThread(thread: ThreadItem): void {
@@ -259,10 +254,11 @@ export class GeneralChatComponent implements OnDestroy {
   private loadThreads(): void {
     this.threadService.list().subscribe({
       next: threads => {
-        this.threads.set(threads);
-        this.filteredThreads.set(threads);
-        if (!this.selectedThread() && threads.length) {
-          this.selectedThread.set(threads[0]);
+        const generalThreads = threads.filter(thread => this.generalStoreIds.has(thread.vector_store_id_read));
+        this.threads.set(generalThreads);
+        this.filteredThreads.set(generalThreads);
+        if (!this.selectedThread() && generalThreads.length) {
+          this.selectedThread.set(generalThreads[0]);
         }
       },
       error: error => {
@@ -292,30 +288,61 @@ export class GeneralChatComponent implements OnDestroy {
   }
 
   private loadVectorStores(): void {
-    this.vectorStoreService.list().subscribe({
-      next: stores => {
-        this.vectorStores.set(stores);
-        if (!this.threadForm.value.vector_store_id && stores.length) {
-          this.threadForm.patchValue({ vector_store_id: stores[0].id }, { emitEvent: false });
+    this.vectorStoreService
+      .list()
+      .pipe(
+        switchMap(stores => {
+          if (!stores.length) {
+            return of({ stores, generalIds: new Set<string>() });
+          }
+          const checks = stores.map(store =>
+            this.documentService
+              .list(store.id)
+              .pipe(
+                map(docs => ({ id: store.id, hasDocs: docs.length > 0 })),
+                catchError(() => of({ id: store.id, hasDocs: true }))
+              )
+          );
+          return forkJoin(checks).pipe(
+            map(results => {
+              const generalIds = new Set(results.filter(result => !result.hasDocs).map(result => result.id));
+              return { stores, generalIds };
+            })
+          );
+        })
+      )
+      .subscribe({
+        next: ({ stores, generalIds }) => {
+          this.vectorStores.set(stores);
+          this.generalStoreIds = generalIds;
+          this.loadThreads();
+        },
+        error: error => {
+          console.error('Failed to load vector stores', error);
+          this.notifications.push('error', 'Unable to load vector stores.');
         }
-      },
-      error: error => {
-        console.error('Failed to load vector stores', error);
-        this.notifications.push('error', 'Unable to load vector stores.');
-      }
-    });
+      });
   }
 
   private startAssistantPolling(threadId: string): void {
     this.stopAssistantPolling();
     this.assistantPending.set(true);
     this.assistantPolling = timer(1000, 2000)
-      .pipe(switchMap(() => this.messageService.list(threadId)))
+      .pipe(
+        switchMap(() =>
+          forkJoin({
+            messages: this.messageService.list(threadId),
+            runs: this.runService.list(threadId)
+          })
+        )
+      )
       .subscribe({
-        next: messages => {
+        next: ({ messages, runs }) => {
           this.messages.set(messages);
+          this.runs.set(runs);
           const hasNewAssistant = messages.some(message => message.role === 'assistant' && !this.lastKnownAssistantIds.has(message.id));
-          if (hasNewAssistant) {
+          const hasActiveRuns = runs.some(run => run.status !== 'completed' && run.status !== 'failed' && run.status !== 'cancelled');
+          if (hasNewAssistant || !hasActiveRuns) {
             this.updateLastKnownAssistantIds(messages);
             this.stopAssistantPolling();
           }
@@ -334,6 +361,17 @@ export class GeneralChatComponent implements OnDestroy {
       this.assistantPolling = null;
     }
     this.assistantPending.set(false);
+  }
+
+  private loadRuns(threadId: string): void {
+    this.runService.list(threadId).subscribe({
+      next: runs => this.runs.set(runs),
+      error: error => console.error('Failed to load runs', error)
+    });
+  }
+
+  activeRuns(): Run[] {
+    return this.runs().filter(run => run.status !== 'completed' && run.status !== 'failed' && run.status !== 'cancelled');
   }
 
   private updateLastKnownAssistantIds(messages: MessageItem[]): void {
