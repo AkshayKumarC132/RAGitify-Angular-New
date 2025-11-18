@@ -1,8 +1,14 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-import { DocumentAccess, DocumentAccessCreateRequest } from '../models/document-access.model';
-import { buildUrl, buildUrlWithId } from '../utils/api-url';
+import {
+  DocumentAccess,
+  DocumentAccessCreateRequest,
+  DocumentAccessGrantResponse,
+  DocumentAccessRemoveRequest,
+  DocumentAccessRemoveResponse
+} from '../models/document-access.model';
+import { buildTokenUrl, buildTokenUrlWithId } from '../utils/api-url';
 import { BaseApiService } from './base-api.service';
 
 @Injectable({ providedIn: 'root' })
@@ -11,16 +17,21 @@ export class DocumentAccessService extends BaseApiService {
 
   list(): Observable<DocumentAccess[]> {
     const token = this.requireToken();
-    return this.http.get<DocumentAccess[]>(buildUrl('/document-access/', token + '/list'));
+    return this.http.get<DocumentAccess[]>(buildTokenUrl('document-access', token, 'list'));
   }
 
-  create(payload: DocumentAccessCreateRequest): Observable<DocumentAccess[]> {
+  create(payload: DocumentAccessCreateRequest): Observable<DocumentAccessGrantResponse> {
     const token = this.requireToken();
-    return this.http.post<DocumentAccess[]>(buildUrl('/document-access/', token), payload);
+    return this.http.post<DocumentAccessGrantResponse>(buildTokenUrl('document-access', token), payload);
   }
 
-  delete(id: string): Observable<void> {
+  remove(payload: DocumentAccessRemoveRequest): Observable<DocumentAccessRemoveResponse> {
     const token = this.requireToken();
-    return this.http.delete<void>(buildUrlWithId('/document-access/', token, id));
+    return this.http.put<DocumentAccessRemoveResponse>(buildTokenUrl('document-access/remove', token), payload);
+  }
+
+  delete(id: number): Observable<void> {
+    const token = this.requireToken();
+    return this.http.delete<void>(buildTokenUrlWithId('document-access', token, id));
   }
 }
